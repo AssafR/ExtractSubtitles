@@ -1,5 +1,5 @@
 --
--- File generated with SQLiteStudio v3.4.4 on ??? ? ??? 5 20:47:41 2023
+-- File generated with SQLiteStudio v3.4.4 on ??? ? ??? 9 21:06:27 2023
 --
 -- Text encoding used: System
 --
@@ -22,7 +22,8 @@ DROP TABLE IF EXISTS images;
 CREATE TABLE IF NOT EXISTS images (
     image_id   INTEGER PRIMARY KEY AUTOINCREMENT,
     image_text TEXT,
-    image      ARRAY
+    image      ARRAY,
+    image_hash TEXT    UNIQUE ON CONFLICT IGNORE
 );
 
 
