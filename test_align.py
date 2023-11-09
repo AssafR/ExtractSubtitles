@@ -23,7 +23,7 @@ def disp(all_images):
 
 
 def process_images(images):
-    images_enlarged = [cv2.copyMakeBorder(img.image, 10, 10, 10, 10,
+    images_enlarged = [cv2.copyMakeBorder(img, 10, 10, 10, 10,
                                           cv2.BORDER_CONSTANT, None, value=(255, 255, 255))
                        for img in images]
     images_enlarged = [cv2.resize(img, None, fx=1.5, fy=1.5, interpolation=cv2.INTER_LANCZOS4)
@@ -39,7 +39,7 @@ def main():
     images_enlarged = process_images(images)
 
     all_images = tesseract_hebrew_utils.embed_images_in_square(images_enlarged, 6)
-    tesseract_hebrew_utils.view_image_wait_key(all_images)
+    disp(all_images)
 
     # plt.imshow(all_images)
     # plt.title('my picture')
@@ -54,6 +54,8 @@ def main():
 
 
 def warp_image_2(img1, img2):
+    # https://stackoverflow.com/questions/55757977/how-to-use-estimaterigidtransform-in-opencv-3-0-or-higher-is-there-any-other-al
+    # Use cv::estimateAffine2D, cv::estimateAffinePartial2D
     pass
 
 def warp_image_1(img1, img2):
@@ -64,10 +66,13 @@ def warp_image_1(img1, img2):
                                     img2, features2.kps, matches, None, flags=2)
     disp(matched_image)
     h, w, c = img2.shape
-    H, _ = cv2.findHomography(features1.matched_pts, features2.matched_pts, cv2.RANSAC, 5.0)
+    # H, _ = cv2.findHomography(features1.matched_pts, features2.matched_pts, cv2.RANSAC, 5.0)
+    H, _ = cv2.estimateAffine2D(features1.matched_pts, features2.matched_pts)
+    # H, _ = cv2.findTransformECC(img1,img2,)
     print(H)
-    warped = cv2.warpPerspective(img1, H, (w, h), \
-                                 borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0, 0))
+    # warped = cv2.warpPerspective(img1, H, (w, h), \
+    #                              borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
+    warped = cv2.warpAffine(img1,H,(w,h),borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
     return warped
 
 

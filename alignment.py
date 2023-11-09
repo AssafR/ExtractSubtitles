@@ -52,7 +52,7 @@ def feature_matching(features0, features1):
             print(ValueError)
             pass
         sorted_matches = sorted(matches, key=lambda x: x.distance, reverse=False)
-        matches = sorted_matches[0:5]
+        matches = sorted_matches#[0:5]
         if (len(matches) > MIN_MATCHES):
             print("len(matches) > MIN_MATCHES)")
             features0.matched_pts = np.float32( \
