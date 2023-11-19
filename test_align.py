@@ -21,9 +21,11 @@ def disp(img):
     # display(Image.fromarray(all_images))
     tesseract_hebrew_utils.view_image_wait_key(img)
 
+
 def main():
     db = tesseract_sql.DatabaseManager(sqlite_db)
-    images_sql = db.read_images_by_text('כ')
+    images_sql_unsorted = db.read_images_by_text('כ')
+    images_sql = sorted(images_sql_unsorted, key=lambda x: x.image_id, reverse=False)
     images = [img.image for img in images_sql]
 
     images_enlarged = tesseract_hebrew_utils.pre_process_images(images[0:10], 2.0)
@@ -60,7 +62,6 @@ def main():
     print(avg_small.shape)
     avg_small_blur = cv2.resize(avg_blur, None, fx=0.5, fy=0.5, interpolation=cv2.INTER_CUBIC)
     disp(tesseract_hebrew_utils.hconcat_resize_max([avg_small, avg_small_blur]))
-
 
 
 if __name__ == '__main__':
