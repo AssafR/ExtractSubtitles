@@ -8,9 +8,12 @@ import numpy as np
 
 from pytesseract import Output, run_and_get_output
 from subprocess import check_output
+from alignment import calc_average_similar_base, transform_ECC
+
+import cv2
 
 TESSERACT_EXE = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-import cv2
+BORDER_SIZE = 10
 
 
 def view_image_wait_key(img):
@@ -64,6 +67,55 @@ def new_char_filename(original_filename, letters_location, description_row):
     new_filename_full = path.with_stem(new_filename + '__' + path.stem).with_suffix('.png')
     new_filename_full = Path(letters_location).joinpath(new_filename_full.name)
     return new_filename_full.as_posix()
+
+
+def find_best_average_image(images_enlarged):
+    # Find by going over all n^2 possibilities
+    avg_images_all_bases = []
+    for base_image_no in range(0, len(images_enlarged)):
+        print(f'Comparing to image #{base_image_no}')
+        avg_image_info = calc_average_similar_base(base_image_no, images_enlarged)
+        if avg_image_info is None:
+            print(f'No average image for base {base_image_no}')
+            continue
+        avg_images_all_bases.append(avg_image_info)
+        print(f' base image: {base_image_no},  total={avg_image_info.total} , cc={avg_image_info.avg_cc}')
+    best_avg = sorted(avg_images_all_bases)[-1]
+    return best_avg
+
+
+def find_best_average_image_improved(images):
+    n_images = len(images)
+    distance_matrix = np.zeros((n_images, n_images),
+                               dtype=np.float32)  # np.full((n_images, n_images), np.nan, dtype=np.float32)
+    aligned_images_matrix = np.full((n_images, n_images), None,
+                                    dtype=np.ndarray)
+    np.fill_diagonal(distance_matrix, 1.0)
+    np.fill_diagonal(aligned_images_matrix, images)
+
+    for (row, img_row) in enumerate(images):
+        for (column, img_column) in enumerate(images):
+            if row >= column:  # Fill only half the matrix
+                continue
+            if distance_matrix[row, column] > 0.0 or np.isnan(distance_matrix[row, column]):  # Already calculated
+                continue
+            cc, warp_matrix, warped = transform_ECC(img_row, img_column)
+            if warp_matrix is None or cc <= 0.0:
+                cc = np.nan  # Value to fill
+                warped = None
+            distance_matrix[row, column] = cc
+            distance_matrix[column, row] = cc
+            aligned_images_matrix[row, column] = warped
+            aligned_images_matrix[column, row] = warped
+
+    # non_zeros = np.count_nonzero(distance_matrix, axis=0)
+    non_zeros = np.count_nonzero(~np.isnan(distance_matrix), axis=1)
+    good_rows = np.argwhere(non_zeros == non_zeros.max())
+    good_rows = good_rows.reshape(len(good_rows))  # Convert to 1-D Vector
+    avg_cc = (np.nanmean(distance_matrix[good_rows], axis=1))
+    best_row = good_rows[np.argmax(avg_cc)]
+    print(distance_matrix[best_row])
+    print(non_zeros, best_row)
 
 
 ##########
@@ -122,7 +174,7 @@ def perform_ocr_commandline(jpgfile, txt_filename, tesseract_exe=TESSERACT_EXE):
 # view_image_wait_key(black_img)
 
 def insert_image(base_image, small_image, y, x):
-    base_image[y:y + small_image.shape[0], x:x + small_image.shape[1], :] = small_image
+    base_image[y:y + small_image.shape[0], x:x + small_image.shape[1]] = small_image
 
 
 def embed_images_in_square(im_list, spacing):
@@ -130,11 +182,12 @@ def embed_images_in_square(im_list, spacing):
     h_max = max(im.shape[0] for im in im_list)
     w_max = max(im.shape[1] for im in im_list)
     images_in_line = math.ceil(math.sqrt(len(im_list)))
-    h_total = (h_max + spacing) * images_in_line + spacing
+    no_lines = math.ceil(len(im_list) / images_in_line)
+    h_total = (h_max + spacing) * no_lines + spacing
     w_total = (w_max + spacing) * images_in_line + spacing
 
-    output_img = np.zeros((h_total, w_total, 3), dtype=np.uint8)  # Black
-    output_img[:, :, 1] = 255
+    output_img = np.zeros((h_total, w_total), dtype=np.uint8)  # Black
+    output_img[:, :] = 255
 
     for image_no, image in enumerate(im_list):
         img_row, img_col = divmod(image_no, images_in_line)
@@ -143,6 +196,7 @@ def embed_images_in_square(im_list, spacing):
         insert_image(output_img, image, img_pos_y, img_pos_x)
 
     return output_img
+
 
 # Interpolation methods:
 #   ("area", cv2.INTER_AREA),
@@ -177,6 +231,20 @@ def resize_images_in_square(im_list, interpolation=cv2.INTER_CUBIC):
         images_lines.append(cv2.hconcat(line_images))
 
 
+def pre_process_images(images, enlarge_ratio=None):
+    images_enlarged = [cv2.copyMakeBorder(  # Convert to Greyscale and add border
+        cv2.cvtColor(img, cv2.COLOR_BGR2GRAY),
+        BORDER_SIZE, BORDER_SIZE, BORDER_SIZE, BORDER_SIZE,
+        cv2.BORDER_CONSTANT, None, value=255)
+        for img in images]
+    images_enlarged = [255 - img for img in images_enlarged]  # Convert to negative (White on Black)
+    if enlarge_ratio is not None:
+        images_enlarged = [cv2.resize(img, None, fx=enlarge_ratio, fy=enlarge_ratio,
+                                      interpolation=cv2.INTER_CUBIC)
+                           for img in images_enlarged]
+    return images_enlarged
+
+
 class SubtitleDataFromFile(object):
     def __init__(self, filename):
         regex_pattern = r"^(.+)_([0-9]{1})([0-9]{4})([0-9]{4})([0-9]{4})([0-9]{4})([0-9]{4})([0-9]{4})$"
@@ -185,8 +253,8 @@ class SubtitleDataFromFile(object):
         if match:
             self.pBaseName = match.group(1)
             self.ln = int(match.group(2))
-            self.xmin = int(match.group(3))
-            self.ymin = int(match.group(4))
+            self.x_min = int(match.group(3))
+            self.y_min = int(match.group(4))
             self.w = int(match.group(5))
             self.h = int(match.group(6))
             self.W = int(match.group(7))

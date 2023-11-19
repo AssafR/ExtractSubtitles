@@ -51,7 +51,7 @@ def main():
     # Save the (currently global) aspect ratio
     aspect = db.insert_aspect_correction(tesseract_sql.AspectCorrection(ASPECT_RATIO_CORRECTION))  # Currently constant
 
-    # create_db_from_jpgfiles(aspect, db, jpgfiles, letters_location, txt_path)
+    create_db_from_jpgfiles(aspect, db, jpgfiles, letters_location, txt_path)
 
     images = db.read_images_by_text('ל')
 

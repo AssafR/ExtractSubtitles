@@ -1,0 +1,2 @@
+letters.sql filter=lfs diff=lfs merge=lfs -text
+letters.sqlite filter=lfs diff=lfs merge=lfs -text

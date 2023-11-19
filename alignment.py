@@ -3,6 +3,9 @@
 import cv2
 import numpy as np
 import copy
+from dataclasses import dataclass, field
+
+MINIMUM_ACCEPTED_CC = 0.9
 
 orb = cv2.ORB_create(
     nfeatures=500,
@@ -20,6 +23,14 @@ class FeatureExtraction:
             self.img, self.kps, 0, \
             flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
         self.matched_pts = []
+
+
+@dataclass(order=True)
+class AverageImageStat:
+    total: int
+    avg_cc: float
+    avg_img: np.ndarray = field(compare=False)
+    base_img: np.ndarray = field(compare=False)
 
 
 LOWES_RATIO = 0.7
@@ -64,34 +75,43 @@ def feature_matching(features0, features1):
     return matches
 
 
-def transform_ECC(im1: np.ndarray, im2: np.ndarray):
+def scale_convert_image(img: np.ndarray, scale_percent=200) -> np.ndarray:
+    img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    scale_factor = scale_percent / 100
+
+    # resize image
+    im_resized = cv2.resize(img_gray, dsize=None, fx=scale_factor, fy=scale_factor, interpolation=cv2.INTER_AREA)
+    return im_resized
+
+
+class CallCountDecorator:
+    """
+    A decorator that will count and print how many times the decorated function was called
+    """
+
+    def __init__(self, inline_func):
+        self.call_count = 0
+        self.inline_func = inline_func
+
+    def __call__(self, *args, **kwargs):
+        self.call_count += 1
+        self._print_call_count()
+        return self.inline_func(*args, **kwargs)
+
+    def _print_call_count(self):
+        print(f"The {self.inline_func.__name__} called {self.call_count} times")
+
+
+@CallCountDecorator
+def transform_ECC(im1: np.ndarray, im2: np.ndarray) -> (float, np.ndarray, np.ndarray):
     # Source:  https://stackoverflow.com/questions/68497827/cv2-findtransformecc-how-to-ignore-small-particles
 
-    scale_percent = 500
     convMode = "up"
     num_iterations = 1000
     corr_coeff = 1e-5  # 0.5
 
-    # Convert images to grayscale
-    im1 = cv2.cvtColor(im1, cv2.COLOR_BGR2GRAY)
-    im2 = cv2.cvtColor(im2, cv2.COLOR_BGR2GRAY)
-
-    # percent of original size
-    width = int(im1.shape[1] * scale_percent / 100)
-    height = int(im1.shape[0] * scale_percent / 100)
-    dim1 = (width, height)
-
-    # percent of original size
-    width = int(im2.shape[1] * scale_percent / 100)
-    height = int(im2.shape[0] * scale_percent / 100)
-    dim2 = (width, height)
-
-    # resize image
-    im1 = cv2.resize(im1, dim1, interpolation=cv2.INTER_AREA)
-    im2 = cv2.resize(im2, dim2, interpolation=cv2.INTER_AREA)
-
     # Find size of image1
-    sz = im1.shape
+    img_size = im1.shape
 
     # Define the motion model
     if convMode != "down":
@@ -118,16 +138,71 @@ def transform_ECC(im1: np.ndarray, im2: np.ndarray):
     # Run the ECC algorithm. The results are stored in warp_matrix.
     try:
         (cc, warp_matrix) = cv2.findTransformECC(im1, im2, warp_matrix, warp_mode, criteria)
-        print(f'cc={cc}')
-
+        # print(f'cc={cc}')
+        assert cc >= MINIMUM_ACCEPTED_CC, "Correlation too low"
         if warp_mode == cv2.MOTION_HOMOGRAPHY:
             # Use warpPerspective for Homography
-            im2_aligned = cv2.warpPerspective(im2, warp_matrix, (sz[1], sz[0]),
+            im2_aligned = cv2.warpPerspective(im2, warp_matrix, (img_size[1], img_size[0]),
                                               flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
         else:
             # Use warpAffine for Translation, Euclidean and Affine
-            im2_aligned = cv2.warpAffine(im2, warp_matrix, (sz[1], sz[0]),
+            im2_aligned = cv2.warpAffine(im2, warp_matrix, (img_size[1], img_size[0]),
                                          flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP);
+
+        cc = 1.0 - abs(1.0 - cc)  # Special fix: Handle case where cc>1 , wrap back from 1
         return cc, warp_matrix, im2_aligned
-    except:
+    except cv2.error as e:
         return 0.0, None, im2
+    except AssertionError as e:
+        return 0.0, None, im2
+
+
+def calc_average_similar_base(base_index, images_enlarged):
+    base_image = images_enlarged[base_index]
+    sum_images = 0  #
+    total = 0
+    sum_cc = 0.0
+    for img_no, img in enumerate(images_enlarged):
+        if img_no == base_index:  # Optimize
+            cc, warp_matrix, warped = 1.0, 1.0, base_image
+        else:
+            cc, warp_matrix, warped = transform_ECC(base_image, img)
+
+        if warp_matrix is not None:
+            # warped = cv2.cvtColor(warped, cv2.COLOR_GRAY2BGR)
+            sum_images = sum_images + warped.astype(np.float64)
+            total = total + 1
+            sum_cc = sum_cc + cc
+        else:
+            # disp(warped)
+            pass
+    if total == 0:
+        return None
+    avg_cc = sum_cc / total
+    avg_img = (sum_images / total).astype(np.uint8)
+    avg = AverageImageStat(total, avg_cc, avg_img, base_image)
+    return avg
+
+
+def warp_image_2(img1, img2):
+    # https://stackoverflow.com/questions/55757977/how-to-use-estimaterigidtransform-in-opencv-3-0-or-higher-is-there-any-other-al
+    # Use cv::estimateAffine2D, cv::estimateAffinePartial2D
+    pass
+
+
+def warp_image_1(img1, img2):
+    features1 = FeatureExtraction(img1)
+    features2 = FeatureExtraction(img2)
+    matches = feature_matching(features1, features2)
+    matched_image = cv2.drawMatches(img1, features1.kps, \
+                                    img2, features2.kps, matches, None, flags=2)
+    # disp(matched_image)
+    h, w, c = img2.shape
+    # H, _ = cv2.findHomography(features1.matched_pts, features2.matched_pts, cv2.RANSAC, 5.0)
+    H, _ = cv2.estimateAffine2D(features1.matched_pts, features2.matched_pts)
+    # H, _ = cv2.findTransformECC(img1,img2,)
+    print(H)
+    # warped = cv2.warpPerspective(img1, H, (w, h), \
+    #                              borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
+    warped = cv2.warpAffine(img1, H, (w, h), borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
+    return warped
