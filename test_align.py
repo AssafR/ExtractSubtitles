@@ -26,7 +26,7 @@ def main():
     images_sql = db.read_images_by_text('כ')
     images = [img.image for img in images_sql]
 
-    images_enlarged = tesseract_hebrew_utils.pre_process_images(images[0:12], 2.0)
+    images_enlarged = tesseract_hebrew_utils.pre_process_images(images[0:10], 2.0)
 
     all_images = tesseract_hebrew_utils.embed_images_in_square(images_enlarged, 6)
     disp(all_images)
