@@ -63,8 +63,7 @@ def main():
     all_images = embed_images_in_square(images_enlarged, 6)
     # view_image_wait_key(all_images)
 
-    img1, img2 = images_enlarged[0],images_enlarged[1]
-
+    img1, img2 = images_enlarged[0], images_enlarged[1]
 
     # all_images = hconcat_resize_max([img.image for img in images])  # cv2.hconcat(images)
     # cv2.imshow('img', all_images)
