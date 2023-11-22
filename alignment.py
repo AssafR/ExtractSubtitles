@@ -3,9 +3,8 @@
 import cv2
 import numpy as np
 import copy
+import utils
 from dataclasses import dataclass, field
-
-from tesseract_hebrew_utils import CallCountDecorator
 
 MINIMUM_ACCEPTED_CC = 0.9
 
@@ -13,6 +12,13 @@ orb = cv2.ORB_create(
     nfeatures=500,
     scaleFactor=1.2,
     scoreType=cv2.ORB_HARRIS_SCORE)
+
+
+def weighted_average(img1, img2, weight1, weight2):
+    all_weight = weight1 + weight2
+    img_combined_float = weight1 * img1.astype(np.float64) + (all_weight - weight1) * img2.astype(np.float64)
+    img_combined_int = (img_combined_float / all_weight).astype(np.uint8)
+    return img_combined_int
 
 
 class FeatureExtraction:
@@ -86,9 +92,7 @@ def scale_convert_image(img: np.ndarray, scale_percent=200) -> np.ndarray:
     return im_resized
 
 
-
-
-@CallCountDecorator
+@utils.CallCountDecorator
 def transform_ECC(im1: np.ndarray, im2: np.ndarray) -> (float, np.ndarray, np.ndarray):
     # Source:  https://stackoverflow.com/questions/68497827/cv2-findtransformecc-how-to-ignore-small-particles
 
@@ -192,3 +196,37 @@ def warp_image_1(img1, img2):
     #                              borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
     warped = cv2.warpAffine(img1, H, (w, h), borderMode=cv2.BORDER_CONSTANT, borderValue=(0, 0, 0))
     return warped
+
+
+def find_best_average_image_improved(images):
+    n_images = len(images)
+    distance_matrix = np.zeros((n_images, n_images),
+                               dtype=np.float32)  # np.full((n_images, n_images), np.nan, dtype=np.float32)
+    aligned_images_matrix = np.full((n_images, n_images), None,
+                                    dtype=np.ndarray)
+    np.fill_diagonal(distance_matrix, 1.0)
+    np.fill_diagonal(aligned_images_matrix, images)
+
+    for (row, img_row) in enumerate(images):
+        for (column, img_column) in enumerate(images):
+            if row >= column:  # Fill only half the matrix
+                continue
+            if distance_matrix[row, column] > 0.0 or np.isnan(distance_matrix[row, column]):  # Already calculated
+                continue
+            cc, warp_matrix, warped = transform_ECC(img_row, img_column)
+            if warp_matrix is None or cc <= 0.0:
+                cc = np.nan  # Value to fill
+                warped = None
+            distance_matrix[row, column] = cc
+            distance_matrix[column, row] = cc
+            aligned_images_matrix[row, column] = warped
+            aligned_images_matrix[column, row] = warped
+
+    # non_zeros = np.count_nonzero(distance_matrix, axis=0)
+    non_zeros = np.count_nonzero(~np.isnan(distance_matrix), axis=1)
+    good_rows = np.argwhere(non_zeros == non_zeros.max())
+    good_rows = good_rows.reshape(len(good_rows))  # Convert to 1-D Vector
+    avg_cc = (np.nanmean(distance_matrix[good_rows], axis=1))
+    best_row = good_rows[np.argmax(avg_cc)]
+    print(distance_matrix[best_row])
+    print(non_zeros, best_row)

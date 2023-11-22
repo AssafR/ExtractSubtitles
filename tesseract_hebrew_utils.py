@@ -1,16 +1,17 @@
 import re
-from pathlib import Path
 import pytesseract
 import os.path
 import datetime
 import math
 import numpy as np
+from pathlib import Path
 
 from pytesseract import Output, run_and_get_output
 from subprocess import check_output
-from alignment import calc_average_similar_base, transform_ECC
 
 import cv2
+
+from alignment import calc_average_similar_base
 
 TESSERACT_EXE = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 BORDER_SIZE = 10
@@ -83,39 +84,6 @@ def find_best_average_image(images_enlarged):
     best_avg = sorted(avg_images_all_bases)[-1]
     return best_avg
 
-
-def find_best_average_image_improved(images):
-    n_images = len(images)
-    distance_matrix = np.zeros((n_images, n_images),
-                               dtype=np.float32)  # np.full((n_images, n_images), np.nan, dtype=np.float32)
-    aligned_images_matrix = np.full((n_images, n_images), None,
-                                    dtype=np.ndarray)
-    np.fill_diagonal(distance_matrix, 1.0)
-    np.fill_diagonal(aligned_images_matrix, images)
-
-    for (row, img_row) in enumerate(images):
-        for (column, img_column) in enumerate(images):
-            if row >= column:  # Fill only half the matrix
-                continue
-            if distance_matrix[row, column] > 0.0 or np.isnan(distance_matrix[row, column]):  # Already calculated
-                continue
-            cc, warp_matrix, warped = transform_ECC(img_row, img_column)
-            if warp_matrix is None or cc <= 0.0:
-                cc = np.nan  # Value to fill
-                warped = None
-            distance_matrix[row, column] = cc
-            distance_matrix[column, row] = cc
-            aligned_images_matrix[row, column] = warped
-            aligned_images_matrix[column, row] = warped
-
-    # non_zeros = np.count_nonzero(distance_matrix, axis=0)
-    non_zeros = np.count_nonzero(~np.isnan(distance_matrix), axis=1)
-    good_rows = np.argwhere(non_zeros == non_zeros.max())
-    good_rows = good_rows.reshape(len(good_rows))  # Convert to 1-D Vector
-    avg_cc = (np.nanmean(distance_matrix[good_rows], axis=1))
-    best_row = good_rows[np.argmax(avg_cc)]
-    print(distance_matrix[best_row])
-    print(non_zeros, best_row)
 
 
 ##########
@@ -260,19 +228,4 @@ class SubtitleDataFromFile(object):
             self.W = int(match.group(7))
             self.H = int(match.group(8))
 
-class CallCountDecorator:
-    """
-    A decorator that will count and print how many times the decorated function was called
-    """
 
-    def __init__(self, inline_func):
-        self.call_count = 0
-        self.inline_func = inline_func
-
-    def __call__(self, *args, **kwargs):
-        self.call_count += 1
-        self._print_call_count()
-        return self.inline_func(*args, **kwargs)
-
-    def _print_call_count(self):
-        print(f"The {self.inline_func.__name__} called {self.call_count} times")

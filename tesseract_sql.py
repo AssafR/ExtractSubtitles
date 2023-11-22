@@ -124,9 +124,9 @@ class DatabaseManager:
         cursor.close()
         return [Image.from_sql_query(row) for row in results]
 
-    def read_images_by_text(self,text):
+    def read_images_by_text_orderbyid(self, text):
         cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM images WHERE image_text=?",(text,))
+        cursor.execute("SELECT * FROM images WHERE image_text=? ORDER BY image_id ASC",(text,))
         results = cursor.fetchall()
         cursor.close()
         return [Image.from_sql_query(row) for row in results]

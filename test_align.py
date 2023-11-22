@@ -24,7 +24,7 @@ def disp(img):
 
 def main():
     db = tesseract_sql.DatabaseManager(sqlite_db)
-    images_sql_unsorted = db.read_images_by_text('כ')
+    images_sql_unsorted = db.read_images_by_text_orderbyid('כ')
     images_sql = sorted(images_sql_unsorted, key=lambda x: x.image_id, reverse=False)
     images = [img.image for img in images_sql]
 

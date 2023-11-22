@@ -53,7 +53,7 @@ def main():
 
     create_db_from_jpgfiles(aspect, db, jpgfiles, letters_location, txt_path)
 
-    images = db.read_images_by_text('ל')
+    images = db.read_images_by_text_orderbyid('ל')
 
     # for img in images:
     #     cv2.rectangle(img.image, (0, 0), (img.image.shape[1], img.image.shape[0]), (0, 255, 0), 3)
