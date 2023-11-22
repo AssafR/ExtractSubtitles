@@ -142,9 +142,9 @@ def transform_ECC(im1: np.ndarray, im2: np.ndarray) -> (float, np.ndarray, np.nd
         cc = 1.0 - abs(1.0 - cc)  # Special fix: Handle case where cc>1 , wrap back from 1
         return cc, warp_matrix, im2_aligned
     except cv2.error as e:
-        return 0.0, None, im2
+        return 0.0, None, im1
     except AssertionError as e:
-        return 0.0, None, im2
+        return 0.0, None, im1
 
 
 def calc_average_similar_base(base_index, images_enlarged):

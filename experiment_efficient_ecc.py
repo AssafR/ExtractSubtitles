@@ -19,6 +19,13 @@ def get_cc(distance_matrix, row, column):
     return distance_matrix[row, column]
 
 
+def create_augmented_image(img1, img2):
+    if img1.shape[0] < img2.shape[0]:
+        img1, img2 = img2, img1  # img1 is the larger image
+    cc, warp_matrix, warped = transform_ECC(img1, img2)
+    return cc, warp_matrix, warped, img1, img2
+
+
 @dataclass(order=True)  # , eq=False
 class ImageCluster:
     total: int
@@ -32,7 +39,11 @@ class ImageCluster:
         new_total = self.total + other.total
         new_avg_cc = (self.avg_cc + other.avg_cc) / 2  # Averaging for simplicity
         new_representative_id = min(self.representative_id, other.representative_id)
-        new_avg_img = weighted_average(self.avg_img, other.avg_img, self.total, other.total)
+
+        # new_avg_img = weighted_average(self.avg_img, other.avg_img, self.total, other.total)
+        # Temporary solution, should be weighted average
+        new_avg_img = weighted_average(self.avg_img, self.avg_img, self.total, other.total)
+
         new_source_images = self.source_images + other.source_images
 
         return ImageCluster(total=new_total, avg_cc=new_avg_cc, representative_id=new_representative_id,
@@ -80,8 +91,16 @@ def main():
     # print(distance_matrix.shape)
 
 
-def merge_clusters(clusters, distances, distance_matrix, base_cluster_no, merged_cluster_no):
-    pass
+def merge_clusters(clusters, distances, distance_matrix, base_cluster_no, second_cluster_no):
+    base_cluster: ImageCluster = clusters[base_cluster_no]
+    second_cluster: ImageCluster = clusters[second_cluster_no]
+
+    cc, warp_matrix, warped = create_augmented_image(base_cluster.avg_img, second_cluster.avg_img)
+
+    merged_cluster: ImageCluster = base_cluster + second_cluster
+    clusters[base_cluster_no] = None
+    clusters[second_cluster_no] = None
+    clusters[merged_cluster.representative_id] = merged_cluster
 
 
 def read_create_distance_matrix(db, letter):
