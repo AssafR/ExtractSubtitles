@@ -19,13 +19,6 @@ def get_cc(distance_matrix, row, column):
     return distance_matrix[row, column]
 
 
-def create_augmented_image(img1, img2):
-    if img1.shape[0] < img2.shape[0]:
-        img1, img2 = img2, img1  # img1 is the larger image
-    cc, warp_matrix, warped = transform_ECC(img1, img2)
-    return cc, warp_matrix, warped, img1, img2
-
-
 @dataclass(order=True)  # , eq=False
 class ImageCluster:
     total: int
@@ -37,17 +30,23 @@ class ImageCluster:
     def __add__(self, other):
         # Implement addition behavior
         new_total = self.total + other.total
-        new_avg_cc = (self.avg_cc + other.avg_cc) / 2  # Averaging for simplicity
         new_representative_id = min(self.representative_id, other.representative_id)
-
-        # new_avg_img = weighted_average(self.avg_img, other.avg_img, self.total, other.total)
+        cc, warp_matrix, combined = create_augmented_image(self, other)
+        new_avg_cc = cc
+        new_avg_img = combined
         # Temporary solution, should be weighted average
-        new_avg_img = weighted_average(self.avg_img, self.avg_img, self.total, other.total)
-
         new_source_images = self.source_images + other.source_images
 
         return ImageCluster(total=new_total, avg_cc=new_avg_cc, representative_id=new_representative_id,
                             avg_img=new_avg_img, source_images=new_source_images)
+
+
+def create_augmented_image(cluster1: ImageCluster, cluster2: ImageCluster):
+    if cluster1.avg_img.shape[0] < cluster2.avg_img.shape[0]:
+        cluster1, cluster2 = cluster1, cluster1  # 1 is the larger image
+    cc, warp_matrix, warped = transform_ECC(cluster1.avg_img, cluster2.avg_img)
+    combined = weighted_average(cluster1.avg_img, warped, cluster1.total, cluster2.total)
+    return cc, warp_matrix, combined
 
 
 def main():
@@ -60,15 +59,19 @@ def main():
     clusters = SortedDict()  # [] # All the clusters
     cluster_singleton: tesseract_sql.ImageCluster
     distances = SortedDict()
+    # Distances is a (sorted) dictionary of dictionaries, with distances[i][j] is the distance between i and j
+    # Initialize
     for img_serial_no, img_sql in enumerate(images_sql):
         image_id = img_serial_no  # img_sql.image_id
+        process_image = tesseract_hebrew_utils.pre_process_images([img_sql.image])[0]
         cluster_singleton = ImageCluster(total=1, avg_cc=0.0, representative_id=image_id,
-                                         avg_img=img_sql.image, source_images=[image_id])
+                                         avg_img=process_image, source_images=[image_id])
         # clusters.append(cluster_singleton)
         clusters[image_id] = cluster_singleton
         distances[image_id] = SortedDict()
         distances[image_id][image_id] = 1.0
 
+    # Main loop
     current: int = clusters.keys()[1]
     for cluster_no in clusters.keys():
         if current == cluster_no:
@@ -91,16 +94,62 @@ def main():
     # print(distance_matrix.shape)
 
 
+def merge_distances(distances: SortedDict, cluster1: ImageCluster, cluster2: ImageCluster):
+    # Two clusters are about to be merged together
+    # Their distances should be updated accordingly.
+    # Assumption: if
+    # Assumption: Cluster1 contains images i1,...,im but only i1 (smallest) is the representative id
+    #             Cluster2 contains images j1,...,jn but only j1 (smallest) is the representative id
+    # Cases:
+    #  WLG, i1 is the new representative
+    #    (i1,i1) = 1.0
+    #    for each k<>i in Cluster1+Cluster2 : (i,k) and (k,i) should be deleted
+    #    for each k<>i not in Cluster1/Cluster2: The new (i,k)/(k,i) should be the minimum
+    #             of all (k,l) for l in (Cluster1+Cluster2 -> {i} join {j})
+
+    # Assuming cluster1 has smaller representative id and so will remain representative of the combined cluster
+
+    dist_dict_1: SortedDict = distances[cluster1.representative_id]
+    dist_dict_2: SortedDict = distances[cluster2.representative_id]
+    dist_dict_result = SortedDict()
+
+    combined_clusters = set(dist_dict_1.keys()).union(set(dist_dict_2.keys()))
+    for cluster_no in combined_clusters:  # Note: This will destroy the original dictionaries
+        # Each cluster_no is a possible known distance to another cluster
+        cc1 = dist_dict_1.pop(cluster_no, 0.0)
+        cc2 = dist_dict_2.pop(cluster_no, 0.0)
+        cc = max(cc1, cc2)
+        dist_dict_result[cluster_no] = cc
+        if cluster_no in distances:
+            distances[cluster_no].pop(cluster2.representative_id, 0.0)
+            distances[cluster_no][cluster1.representative_id] = cc
+        else:
+            print(f'No distance for cluster {cluster_no}')
+    # Now there's a new combined dictionary with the best correlation of the two groups
+
+    distances.pop(cluster2.representative_id,0.0)
+    distances[cluster1.representative_id] = dist_dict_result
+
+    return dist_dict_result
+
+
 def merge_clusters(clusters, distances, distance_matrix, base_cluster_no, second_cluster_no):
     base_cluster: ImageCluster = clusters[base_cluster_no]
     second_cluster: ImageCluster = clusters[second_cluster_no]
 
-    cc, warp_matrix, warped = create_augmented_image(base_cluster.avg_img, second_cluster.avg_img)
+    if base_cluster.representative_id > second_cluster.representative_id:  # Base is always with smaller id
+        second_cluster, base_cluster = base_cluster, second_cluster
 
     merged_cluster: ImageCluster = base_cluster + second_cluster
-    clusters[base_cluster_no] = None
-    clusters[second_cluster_no] = None
-    clusters[merged_cluster.representative_id] = merged_cluster
+    if merged_cluster.avg_cc is not None:
+        clusters[base_cluster.representative_id] = None
+        clusters[second_cluster.representative_id] = None
+        clusters[merged_cluster.representative_id] = merged_cluster
+
+        merge_distances(distances, base_cluster, second_cluster)
+
+        return True
+    return False
 
 
 def read_create_distance_matrix(db, letter):
@@ -117,7 +166,7 @@ def read_create_distance_matrix(db, letter):
 
 
 def calc_distance_matrix(images):
-    n_images = len(images)
+    n_images: int = len(images)
     distance_matrix = np.zeros((n_images, n_images),
                                dtype=np.float32)  # np.full((n_images, n_images), np.nan, dtype=np.float32)
     aligned_images_matrix = np.full((n_images, n_images), None,

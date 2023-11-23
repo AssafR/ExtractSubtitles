@@ -15,6 +15,7 @@ orb = cv2.ORB_create(
 
 
 def weighted_average(img1, img2, weight1, weight2):
+    assert img1.shape == img2.shape, "Images must have the same shape"
     all_weight = weight1 + weight2
     img_combined_float = weight1 * img1.astype(np.float64) + (all_weight - weight1) * img2.astype(np.float64)
     img_combined_int = (img_combined_float / all_weight).astype(np.uint8)
