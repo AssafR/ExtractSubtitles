@@ -13,4 +13,4 @@ class CallCountDecorator:
         return self.inline_func(*args, **kwargs)
 
     def _print_call_count(self):
-        print(f"The {self.inline_func.__name__} called {self.call_count} times")
+        print(f" * The method {self.inline_func.__name__} called {self.call_count} times")

@@ -14,11 +14,18 @@ sqlite_db = r'.\letters.sqlite'
 
 DISTANCE_THRESHOLD_FOR_MERGE = 0.97
 
+clusters = SortedDict()  # [] # All the clusters
+distances = SortedDict()
+
+
+@CallCountDecorator
+def get_cc_cache(distance_matrix, row, column):
+    return distance_matrix[row, column]
 
 @CallCountDecorator
 def get_cc(distance_matrix, row, column):
-    return distance_matrix[row, column]
-
+    cc, warp_matrix, warped = transform_ECC(clusters[row].avg_img, clusters[column].avg_img)
+    return cc
 
 @dataclass(order=True)  # , eq=False
 class ImageCluster:
@@ -57,9 +64,7 @@ def main():
     distance_matrix = read_create_distance_matrix(db, letter)
     images_sql = db.read_images_by_text_orderbyid(letter)
 
-    clusters = SortedDict()  # [] # All the clusters
     cluster_singleton: tesseract_sql.ImageCluster
-    distances = SortedDict()
     # Distances is a (sorted) dictionary of dictionaries, with distances[i][j] is the distance between i and j
     # Initialize
     for img_serial_no, img_sql in enumerate(images_sql):
@@ -92,18 +97,21 @@ def main():
             if pd.notna(cc):
                 if cc > DISTANCE_THRESHOLD_FOR_MERGE:
                     print(f'  Merging clusters {current} and {cluster_no}')
-                    merge_clusters(clusters, distances, distance_matrix, current, cluster_no)
+                    merged_cluster = merge_clusters(clusters, distances, distance_matrix, current, cluster_no)
                     merges = merges + 1
+                    current = merged_cluster.representative_id
                 else:
-                    # print(f'  Should not merge clusters {current} and {cluster_no}')
-                    pass
+                    print(f'  Should not merge clusters {current} and {cluster_no}')
             else:
                 print(f'No cc between {current} and {cluster_no}')
         print(f'Loop finished with {merges} merges')
 
     print(f'Final clusters: ')
     for cluster_no in clusters.keys():
-        print(f'Cluster #{cluster_no}: {clusters[cluster_no].total}')
+        if clusters[cluster_no]:
+            print(f'Cluster #{cluster_no}: {clusters[cluster_no].total}')
+        else:
+            print(f'Cluster #{cluster_no}: None')
     # print(distance_matrix)
     # print(distance_matrix.shape)
 
@@ -162,15 +170,15 @@ def merge_clusters(clusters, distances, distance_matrix, base_cluster_no, second
 
         merge_distances(distances, base_cluster, second_cluster)
 
-        return True
-    return False
+        return merged_cluster
+    return None
 
 
 def read_create_distance_matrix(db, letter):
     filename = f'distance_matrix_{letter}.npy'
     if Path(filename).exists():
         distance_matrix = np.load(filename)
-        print(distance_matrix)
+        # print(distance_matrix)
     else:
         images = read_images_for_letter(db, letter)
 
