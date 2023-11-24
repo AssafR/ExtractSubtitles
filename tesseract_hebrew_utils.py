@@ -22,6 +22,8 @@ def view_image_wait_key(img):
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
+def disp(img):
+    view_image_wait_key(img)
 
 class OcrBoxResult:
 

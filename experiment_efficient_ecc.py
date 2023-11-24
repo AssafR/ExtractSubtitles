@@ -8,6 +8,7 @@ from sortedcontainers import SortedDict
 import numpy as np
 import pandas as pd
 from collections import OrderedDict
+from tesseract_hebrew_utils import view_image_wait_key, disp
 
 sqlite_db = r'.\letters.sqlite'
 
@@ -72,24 +73,37 @@ def main():
         distances[image_id][image_id] = 1.0
 
     # Main loop
-    current: int = clusters.keys()[1]
-    for cluster_no in clusters.keys():
-        if current == cluster_no:
-            continue
-        if clusters[cluster_no] is None or clusters[current] is None:
-            continue
+    merges = 1
+    while merges > 0:
+        current: int = clusters.keys()[-1]
+        merges = 0
+        print(f'Current cluster: {current}')
+        for cluster_no in clusters.keys():
+            if current == cluster_no:
+                continue
+            if clusters[cluster_no] is None or clusters[current] is None:
+                continue
 
-        cc = get_cc(distance_matrix, current, cluster_no)  # dist can be nan
-        print(f'CC between {current} and {cluster_no} is {cc}')
-        if pd.notna(cc):
-            if cc > DISTANCE_THRESHOLD_FOR_MERGE:
-                print(f'  Should merge clusters {current} and {cluster_no}')
-                merge_clusters(clusters, distances, distance_matrix, current, cluster_no)
+            cc = get_cc(distance_matrix, current, cluster_no)  # dist can be nan
+            distances[cluster_no][current] = cc
+            distances[current][cluster_no] = cc
+
+            print(f'CC between {current} and {cluster_no} is {cc}')
+            if pd.notna(cc):
+                if cc > DISTANCE_THRESHOLD_FOR_MERGE:
+                    print(f'  Merging clusters {current} and {cluster_no}')
+                    merge_clusters(clusters, distances, distance_matrix, current, cluster_no)
+                    merges = merges + 1
+                else:
+                    # print(f'  Should not merge clusters {current} and {cluster_no}')
+                    pass
             else:
-                print(f'  Should not merge clusters {current} and {cluster_no}')
-        else:
-            print(f'No cc between {current} and {cluster_no}')
+                print(f'No cc between {current} and {cluster_no}')
+        print(f'Loop finished with {merges} merges')
 
+    print(f'Final clusters: ')
+    for cluster_no in clusters.keys():
+        print(f'Cluster #{cluster_no}: {clusters[cluster_no].total}')
     # print(distance_matrix)
     # print(distance_matrix.shape)
 
@@ -127,7 +141,7 @@ def merge_distances(distances: SortedDict, cluster1: ImageCluster, cluster2: Ima
             print(f'No distance for cluster {cluster_no}')
     # Now there's a new combined dictionary with the best correlation of the two groups
 
-    distances.pop(cluster2.representative_id,0.0)
+    distances.pop(cluster2.representative_id, 0.0)
     distances[cluster1.representative_id] = dist_dict_result
 
     return dist_dict_result
@@ -192,7 +206,7 @@ def read_images_for_letter(db, letter):
     images_sql = db.read_images_by_text_orderbyid(letter)
     # images_sql = sorted(images_sql, key=lambda x: x.image_id, reverse=False)
     images_raw = [img.image for img in images_sql]
-    images = tesseract_hebrew_utils.pre_process_images(images_raw, 2.0)
+    images = tesseract_hebrew_utils.pre_process_images(images_raw, 3.0)
     return images
 
 
