@@ -1,3 +1,5 @@
+import collections
+
 import tesseract_hebrew_utils
 import tesseract_sql
 from alignment import transform_ECC, weighted_average
@@ -14,7 +16,7 @@ sqlite_db = r'.\letters.sqlite'
 
 DISTANCE_THRESHOLD_FOR_MERGE = 0.97
 
-clusters = SortedDict()  # [] # All the clusters
+clusters = SortedDict()  # All the clusters
 distances = SortedDict()
 
 
@@ -22,10 +24,12 @@ distances = SortedDict()
 def get_cc_cache(distance_matrix, row, column):
     return distance_matrix[row, column]
 
+
 @CallCountDecorator
 def get_cc(distance_matrix, row, column):
     cc, warp_matrix, warped = transform_ECC(clusters[row].avg_img, clusters[column].avg_img)
     return cc
+
 
 @dataclass(order=True)  # , eq=False
 class ImageCluster:
@@ -39,10 +43,9 @@ class ImageCluster:
         # Implement addition behavior
         new_total = self.total + other.total
         new_representative_id = min(self.representative_id, other.representative_id)
-        cc, warp_matrix, combined = create_augmented_image(self, other)
+        cc, warp_matrix, combined = create_augmented_image(self, other)  # Weighted average
         new_avg_cc = cc
         new_avg_img = combined
-        # Temporary solution, should be weighted average
         new_source_images = self.source_images + other.source_images
 
         return ImageCluster(total=new_total, avg_cc=new_avg_cc, representative_id=new_representative_id,
@@ -63,19 +66,21 @@ def main():
 
     distance_matrix = read_create_distance_matrix(db, letter)
     images_sql = db.read_images_by_text_orderbyid(letter)
+    processing_queue = collections.deque()
 
-    cluster_singleton: tesseract_sql.ImageCluster
+    cluster_singleton: ImageCluster
     # Distances is a (sorted) dictionary of dictionaries, with distances[i][j] is the distance between i and j
+    # Should be symmetrical, i.e. distances[i][j] == distances[j][i]
     # Initialize
     for img_serial_no, img_sql in enumerate(images_sql):
         image_id = img_serial_no  # img_sql.image_id
         process_image = tesseract_hebrew_utils.pre_process_images([img_sql.image])[0]
         cluster_singleton = ImageCluster(total=1, avg_cc=0.0, representative_id=image_id,
                                          avg_img=process_image, source_images=[image_id])
-        # clusters.append(cluster_singleton)
         clusters[image_id] = cluster_singleton
         distances[image_id] = SortedDict()
         distances[image_id][image_id] = 1.0
+        processing_queue.appendleft(image_id)
 
     # Main loop
     merges = 1
