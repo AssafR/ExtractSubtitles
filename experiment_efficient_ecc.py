@@ -14,7 +14,7 @@ from tesseract_hebrew_utils import view_image_wait_key, disp
 
 sqlite_db = r'.\letters.sqlite'
 
-DISTANCE_THRESHOLD_FOR_MERGE = 0.97
+CORRELATION_THRESHOLD_FOR_MERGE = 0.97
 
 clusters = SortedDict()  # All the clusters
 distances = SortedDict()
@@ -66,7 +66,8 @@ def main():
 
     distance_matrix = read_create_distance_matrix(db, letter)
     images_sql = db.read_images_by_text_orderbyid(letter)
-    processing_queue = collections.deque()
+    no_images = len(images_sql)
+    processing_queue = collections.deque(maxsize=no_images + 1)
 
     cluster_singleton: ImageCluster
     # Distances is a (sorted) dictionary of dictionaries, with distances[i][j] is the distance between i and j
@@ -82,34 +83,29 @@ def main():
         distances[image_id][image_id] = 1.0
         processing_queue.appendleft(image_id)
 
-    # Main loop
-    merges = 1
-    while merges > 0:
-        current: int = clusters.keys()[-1]
-        merges = 0
-        print(f'Current cluster: {current}')
-        for cluster_no in clusters.keys():
-            if current == cluster_no:
-                continue
-            if clusters[cluster_no] is None or clusters[current] is None:
-                continue
+    current = processing_queue.pop()  # Initialize with first image from queue
+    while len(processing_queue) > 0:
+        next_cluster = processing_queue.pop()
+        if next_cluster is None or clusters[next_cluster] is None:
+            continue
+        if current is None or clusters[current] is None:
+            current = next_cluster
+            continue
+        if current == next_cluster:
+            continue
 
-            cc = get_cc(distance_matrix, current, cluster_no)  # dist can be nan
-            distances[cluster_no][current] = cc
-            distances[current][cluster_no] = cc
+        print(f'Processing {current} and {next_cluster}')
+        cc = get_cc(distance_matrix, current, next_cluster)  # dist can be nan
+        if np.isnan(cc):
+            pass #  ??
+        elif cc > CORRELATION_THRESHOLD_FOR_MERGE:
+            merged_cluster = merge_clusters(clusters, distances, distance_matrix, current, next_cluster)
+            if merged_cluster is not None:
+                processing_queue.appendleft(merged_cluster.representative_id)
+                current = merged_cluster.representative_id
 
-            print(f'CC between {current} and {cluster_no} is {cc}')
-            if pd.notna(cc):
-                if cc > DISTANCE_THRESHOLD_FOR_MERGE:
-                    print(f'  Merging clusters {current} and {cluster_no}')
-                    merged_cluster = merge_clusters(clusters, distances, distance_matrix, current, cluster_no)
-                    merges = merges + 1
-                    current = merged_cluster.representative_id
-                else:
-                    print(f'  Should not merge clusters {current} and {cluster_no}')
-            else:
-                print(f'No cc between {current} and {cluster_no}')
-        print(f'Loop finished with {merges} merges')
+
+
 
     print(f'Final clusters: ')
     for cluster_no in clusters.keys():
