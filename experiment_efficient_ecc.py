@@ -13,10 +13,12 @@ from collections import OrderedDict
 from tesseract_hebrew_utils import view_image_wait_key, disp
 import cv2
 
+
 sqlite_db = r'.\letters.sqlite'
 
-CORRELATION_THRESHOLD_FOR_MERGE = 0.90
-CORRELATION_THRESHOLD_FOR_DISMISSAL = 0.3
+CORRELATION_THRESHOLD_FOR_MERGE = 0.95
+CORRELATION_THRESHOLD_FOR_DISMISSAL = 0.6
+FRACTION_OF_TOO_FAR_TO_ELIMINATE = 0.5
 
 clusters = SortedDict()  # All the clusters
 distances = SortedDict()
@@ -32,15 +34,15 @@ def get_cc(distance_matrix, row, column):
     if row == column:
         return 1.0, True
     cached = False
-    cached_cc = distances[row].get(column, None)
+    cached_cc, _, _ = distances[row].get(column, (None, None, None))
     if cached_cc is not None:
         # print(f'     Cache hit for {row},{column} is {cached_cc}')
         cached = True
         cc = cached_cc
     else:
         cc, warp_matrix, warped = transform_ECC(clusters[row].avg_img, clusters[column].avg_img)
-        distances[row][column] = cc
-        distances[column][row] = cc
+        distances[row][column] = (cc, warp_matrix, warped)
+        distances[column][row] = (cc, warp_matrix, warped)
     return cc, cached
 
 
@@ -68,17 +70,17 @@ class ImageCluster:
 def create_augmented_image(cluster1: ImageCluster, cluster2: ImageCluster):
     if cluster1.avg_img.shape[0] < cluster2.avg_img.shape[0]:
         cluster1, cluster2 = cluster1, cluster1  # 1 is the larger image
-    cc, warp_matrix, warped = transform_ECC(cluster1.avg_img, cluster2.avg_img)
+    cc, warp_matrix, warped= transform_ECC(cluster1.avg_img, cluster2.avg_img)
     combined = weighted_average(cluster1.avg_img, warped, cluster1.total, cluster2.total)
     return cc, warp_matrix, combined
 
 
 def should_eliminate_cluster(cluster_no, total_clusters):
     num_clusters_too_far = 0
-    for c, dist in distances[cluster_no].items():
-        if dist < CORRELATION_THRESHOLD_FOR_DISMISSAL and clusters[c] is not None:
+    for c, (cc, warp_matrix, warped) in distances[cluster_no].items():
+        if cc < CORRELATION_THRESHOLD_FOR_DISMISSAL and clusters[c] is not None:
             num_clusters_too_far = num_clusters_too_far + clusters[c].total
-            if num_clusters_too_far > 0.5 * total_clusters:
+            if num_clusters_too_far > FRACTION_OF_TOO_FAR_TO_ELIMINATE * total_clusters:
                 return True
     return False
 
@@ -86,16 +88,21 @@ def should_eliminate_cluster(cluster_no, total_clusters):
 def main():
     db = tesseract_sql.DatabaseManager(sqlite_db)
     # letter = 'כ'  # 'ו'
-    letter = 'ו'  # ''
+    letter = 'ת'  # ''
 
-    distance_matrix = read_create_distance_matrix(db, letter)
+
+    # distance_matrix = read_create_distance_matrix(db, letter)
     images_sql = db.read_images_by_text_orderbyid(letter)
     no_images = len(images_sql)
+    print(f'Number of images: {no_images}')
+    distance_matrix = None
+
     processing_queue = collections.deque(maxlen=no_images + 1)
     next_processing_queue = collections.deque(maxlen=no_images + 1)
 
     init_clusters_and_distances(images_sql)
     processing_queue.extendleft(clusters.keys())
+
 
     current = processing_queue.pop()  # Initialize with first image from queue
     new_distances_calculated_in_loop = 0
@@ -134,8 +141,8 @@ def main():
         if not cached:  # A new value was calculated
             new_distances_calculated_in_loop = new_distances_calculated_in_loop + 1
         if np.isnan(cc):
-            distances[current][next_cluster] = 0.0
-            distances[next_cluster][current] = 0.0
+            distances[current][next_cluster] = (0.0, None, None)
+            distances[next_cluster][current] = (0.0, None, None)
             next_processing_queue.appendleft(next_cluster)
             continue
         elif cc > CORRELATION_THRESHOLD_FOR_MERGE:
@@ -162,11 +169,11 @@ def main():
         # else:
         #     print(f'Cluster #{cluster_no}: None')
     print(f'Total images: {no_images}')
-    biggest_clusters_images = [cluster.avg_img for cluster_id,cluster in biggest_clusters.items() if cluster.total>1]
-    biggest_clusters_images.append(biggest_clusters_images[0]) # Handle the edge case of size 1
+    biggest_clusters_images = [cluster.avg_img for cluster_id, cluster in biggest_clusters.items() if cluster.total > 1]
+    biggest_clusters_images.append(biggest_clusters_images[0])  # Handle the edge case of size 1
     cc, warp_matrix, im_aligned = transform_ECC(biggest_clusters_images[0], biggest_clusters_images[1])
     print(f'cc={cc}')
-    disp(tesseract_hebrew_utils.hconcat_resize_max(biggest_clusters_images,interpolation=cv2.INTER_CUBIC))
+    disp(tesseract_hebrew_utils.hconcat_resize_max(biggest_clusters_images, interpolation=cv2.INTER_CUBIC))
 
     # print(distance_matrix)
     # print(distance_matrix.shape)
@@ -184,7 +191,7 @@ def init_clusters_and_distances(images_sql):
                                          avg_img=process_image, source_images=[image_id])
         clusters[image_id] = cluster_singleton
         distances[image_id] = SortedDict()
-        distances[image_id][image_id] = 1.0
+        distances[image_id][image_id] = (1.0, None, None)
 
 
 def merge_distances(distances: SortedDict, cluster1: ImageCluster, cluster2: ImageCluster):
@@ -209,13 +216,17 @@ def merge_distances(distances: SortedDict, cluster1: ImageCluster, cluster2: Ima
     combined_clusters = set(dist_dict_1.keys()).union(set(dist_dict_2.keys()))
     for cluster_no in combined_clusters:  # Note: This will destroy the original dictionaries
         # Each cluster_no is a possible known distance to another cluster
-        cc1 = dist_dict_1.pop(cluster_no, 0.0)
-        cc2 = dist_dict_2.pop(cluster_no, 0.0)
-        cc = max(cc1, cc2)
-        dist_dict_result[cluster_no] = cc
+        (cc1, warp_matrix1, warped1) = dist_dict_1.pop(cluster_no, (0.0, None, None))
+        (cc2, warp_matrix2, warped2) = dist_dict_2.pop(cluster_no, (0.0, None, None))
+        if (cc1>cc2):
+            (cc, warp_matrix, warped) = (cc1, warp_matrix1, warped1)
+        else:
+            (cc, warp_matrix, warped) = (cc2, warp_matrix2, warped2)
+
+        dist_dict_result[cluster_no] =  (cc, warp_matrix, warped)
         if cluster_no in distances:
             distances[cluster_no].pop(cluster2.representative_id, 0.0)
-            distances[cluster_no][cluster1.representative_id] = cc
+            distances[cluster_no][cluster1.representative_id] =  (cc, warp_matrix, warped)
         else:
             # print(f'No distance for cluster {cluster_no}')
             pass
