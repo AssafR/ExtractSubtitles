@@ -6,6 +6,7 @@ import numpy as np
 import io
 import hashlib
 
+import tesseract_hebrew_utils
 from tesseract_hebrew_utils import get_file_attributes
 
 
@@ -227,3 +228,11 @@ def convert_array(text):
     out = io.BytesIO(text)
     out.seek(0)
     return np.load(out)
+
+
+def read_images_for_letter(db, letter):
+    images_sql = db.read_images_by_text_orderbyid(letter)
+    # images_sql = sorted(images_sql, key=lambda x: x.image_id, reverse=False)
+    images_raw = [img.image for img in images_sql]
+    images = tesseract_hebrew_utils.pre_process_images(images_raw, 3.0)
+    return images

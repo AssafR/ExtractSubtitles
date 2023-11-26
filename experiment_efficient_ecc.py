@@ -3,23 +3,24 @@ import collections
 import tesseract_hebrew_utils
 import tesseract_sql
 from alignment import transform_ECC, weighted_average
-from utils import CallCountDecorator
+from tesseract_sql import read_images_for_letter
 from dataclasses import dataclass, field
 from pathlib import Path
 from sortedcontainers import SortedDict
 import numpy as np
-import pandas as pd
-from collections import OrderedDict
-from tesseract_hebrew_utils import view_image_wait_key, disp
+from tesseract_hebrew_utils import disp
 import cv2
 
 sqlite_db = r'.\letters.sqlite'
+
+LETTER = '.'
 
 CORRELATION_THRESHOLD_FOR_MERGE = 0.95
 CORRELATION_THRESHOLD_FOR_DISMISSAL = 0.8
 FRACTION_OF_TOO_FAR_TO_ELIMINATE = 0.5
 ACCEPTABLE_EXTRA_DIFFERENCE_IN_DIMENSIONS = 0.2
 ACCEPTABLE_RATIO_OF_DIFFERENCE_IN_DIMENSIONS = 1.0 + ACCEPTABLE_EXTRA_DIFFERENCE_IN_DIMENSIONS
+
 
 clusters = SortedDict()  # All the clusters
 distances = SortedDict()
@@ -41,11 +42,11 @@ def images_too_different_in_size(img1, img2):
 
 
 # @CallCountDecorator
-def get_cc(distance_matrix, row, column):
+def get_cc(distances_dict, row, column):
     if row == column:
         return 1.0, True
     cached = False
-    cached_cc, _, _ = distances[row].get(column, (None, None, None))
+    cached_cc, _, _ = distances_dict[row].get(column, (None, None, None))
     if cached_cc is not None:
         # print(f'     Cache hit for {row},{column} is {cached_cc}')
         cached = True
@@ -55,8 +56,8 @@ def get_cc(distance_matrix, row, column):
             (cc, warp_matrix, warped) = (0.0, None, None)
         else:
             cc, warp_matrix, warped = transform_ECC(clusters[row].avg_img, clusters[column].avg_img)
-        distances[row][column] = (cc, warp_matrix, warped)
-        distances[column][row] = (cc, warp_matrix, warped)
+        distances_dict[row][column] = (cc, warp_matrix, warped)
+        distances_dict[column][row] = (cc, warp_matrix, warped)
     return cc, cached
 
 
@@ -99,22 +100,26 @@ def should_eliminate_cluster(cluster_no, total_clusters):
                 num_images_too_far = num_images_too_far + clusters[c].total
                 if num_images_too_far > FRACTION_OF_TOO_FAR_TO_ELIMINATE * total_clusters:
                     return True
-    if (num_images_too_far  > FRACTION_OF_TOO_FAR_TO_ELIMINATE * total_clusters and
+    if (num_images_too_far > FRACTION_OF_TOO_FAR_TO_ELIMINATE * total_clusters and
             num_images_too_far > FRACTION_OF_TOO_FAR_TO_ELIMINATE * num_images_total):
         return True
     return False
 
 
+def append_left_if_doesnt_exist(de_queue, element):
+    if element not in de_queue:
+        de_queue.appendleft(element)
+
+
 def main():
     db = tesseract_sql.DatabaseManager(sqlite_db)
     # letter = 'כ'  # 'ו'
-    letter = 'א'  # ''
+    letter = LETTER
 
     # distance_matrix = read_create_distance_matrix(db, letter)
     images_sql = db.read_images_by_text_orderbyid(letter)
     no_images = len(images_sql)
     print(f'Number of images: {no_images}')
-    distance_matrix = None
 
     processing_queue = collections.deque(maxlen=no_images + 1)
     next_processing_queue = collections.deque(maxlen=no_images + 1)
@@ -146,35 +151,35 @@ def main():
 
         if current is None or clusters[current] is None:
             current = next_cluster
-            processing_queue.appendleft(next_cluster)
+            append_left_if_doesnt_exist(processing_queue, next_cluster)
             continue
         if next_cluster is None or clusters[next_cluster] is None:
             continue
         if current == next_cluster:
-            next_processing_queue.appendleft(next_cluster)
+            append_left_if_doesnt_exist(next_processing_queue, next_cluster)
             continue
 
         print(f'Processing {current} and {next_cluster}')
-        cc, cached = get_cc(distance_matrix, current, next_cluster)  # dist can be nan
+        cc, cached = get_cc(distances, current, next_cluster)  # dist can be nan
         if not cached:  # A new value was calculated
             new_distances_calculated_in_loop = new_distances_calculated_in_loop + 1
         if np.isnan(cc):
             distances[current][next_cluster] = (0.0, None, None)
             distances[next_cluster][current] = (0.0, None, None)
-            next_processing_queue.appendleft(next_cluster)
+            append_left_if_doesnt_exist(next_processing_queue, next_cluster)
             continue
         elif cc > CORRELATION_THRESHOLD_FOR_MERGE:
             print(f'Merging {current} and {next_cluster}')
-            merged_cluster = merge_clusters(clusters, distances, distance_matrix, current, next_cluster)
+            merged_cluster = merge_clusters(clusters, distances, current, next_cluster)
             if merged_cluster is not None:
-                next_processing_queue.appendleft(merged_cluster.representative_id)
+                append_left_if_doesnt_exist(next_processing_queue, merged_cluster.representative_id)
                 print(f'  --  Merged {current} and {next_cluster}')
                 current = merged_cluster.representative_id
                 continue
             else:
-                next_processing_queue.appendleft(next_cluster)
+                append_left_if_doesnt_exist(next_processing_queue, next_cluster)
         else:
-            next_processing_queue.appendleft(next_cluster)
+            append_left_if_doesnt_exist(next_processing_queue, next_cluster)
 
     print(f'Final clusters: ')
     final_clusters = {k: v for k, v in clusters.items() if v is not None}
@@ -256,7 +261,7 @@ def merge_distances(distances: SortedDict, cluster1: ImageCluster, cluster2: Ima
     return dist_dict_result
 
 
-def merge_clusters(clusters, distances, distance_matrix, base_cluster_no, second_cluster_no):
+def merge_clusters(clusters, distances, base_cluster_no, second_cluster_no):
     base_cluster: ImageCluster = clusters[base_cluster_no]
     second_cluster: ImageCluster = clusters[second_cluster_no]
 
@@ -270,8 +275,8 @@ def merge_clusters(clusters, distances, distance_matrix, base_cluster_no, second
         clusters[merged_cluster.representative_id] = merged_cluster
 
         merge_distances(distances, base_cluster, second_cluster)
-
         return merged_cluster
+
     return None
 
 
@@ -309,14 +314,6 @@ def calc_distance_matrix(images):
             distance_matrix[row, column] = cc
             distance_matrix[column, row] = cc
     return distance_matrix
-
-
-def read_images_for_letter(db, letter):
-    images_sql = db.read_images_by_text_orderbyid(letter)
-    # images_sql = sorted(images_sql, key=lambda x: x.image_id, reverse=False)
-    images_raw = [img.image for img in images_sql]
-    images = tesseract_hebrew_utils.pre_process_images(images_raw, 3.0)
-    return images
 
 
 if __name__ == '__main__':
