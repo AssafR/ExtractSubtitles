@@ -13,12 +13,13 @@ from collections import OrderedDict
 from tesseract_hebrew_utils import view_image_wait_key, disp
 import cv2
 
-
 sqlite_db = r'.\letters.sqlite'
 
 CORRELATION_THRESHOLD_FOR_MERGE = 0.95
-CORRELATION_THRESHOLD_FOR_DISMISSAL = 0.6
+CORRELATION_THRESHOLD_FOR_DISMISSAL = 0.8
 FRACTION_OF_TOO_FAR_TO_ELIMINATE = 0.5
+ACCEPTABLE_EXTRA_DIFFERENCE_IN_DIMENSIONS = 0.2
+ACCEPTABLE_RATIO_OF_DIFFERENCE_IN_DIMENSIONS = 1.0 + ACCEPTABLE_EXTRA_DIFFERENCE_IN_DIMENSIONS
 
 clusters = SortedDict()  # All the clusters
 distances = SortedDict()
@@ -27,6 +28,16 @@ distances = SortedDict()
 # @CallCountDecorator
 def get_cc_cache(distance_matrix, row, column):
     return distance_matrix[row, column]
+
+
+def images_too_different_in_size(img1, img2):
+    ratio1 = img1.shape[0] / img2.shape[0]
+    ratio2 = img1.shape[1] / img2.shape[1]
+    ratio1 = max(ratio1, 1 / ratio1)
+    ratio2 = max(ratio2, 1 / ratio2)
+    should_disqualify = (ratio1 > ACCEPTABLE_RATIO_OF_DIFFERENCE_IN_DIMENSIONS or
+                         ratio2 > ACCEPTABLE_RATIO_OF_DIFFERENCE_IN_DIMENSIONS)
+    return should_disqualify
 
 
 # @CallCountDecorator
@@ -40,7 +51,10 @@ def get_cc(distance_matrix, row, column):
         cached = True
         cc = cached_cc
     else:
-        cc, warp_matrix, warped = transform_ECC(clusters[row].avg_img, clusters[column].avg_img)
+        if images_too_different_in_size(clusters[row].avg_img, clusters[column].avg_img):
+            (cc, warp_matrix, warped) = (0.0, None, None)
+        else:
+            cc, warp_matrix, warped = transform_ECC(clusters[row].avg_img, clusters[column].avg_img)
         distances[row][column] = (cc, warp_matrix, warped)
         distances[column][row] = (cc, warp_matrix, warped)
     return cc, cached
@@ -70,26 +84,31 @@ class ImageCluster:
 def create_augmented_image(cluster1: ImageCluster, cluster2: ImageCluster):
     if cluster1.avg_img.shape[0] < cluster2.avg_img.shape[0]:
         cluster1, cluster2 = cluster1, cluster1  # 1 is the larger image
-    cc, warp_matrix, warped= transform_ECC(cluster1.avg_img, cluster2.avg_img)
+    cc, warp_matrix, warped = transform_ECC(cluster1.avg_img, cluster2.avg_img)
     combined = weighted_average(cluster1.avg_img, warped, cluster1.total, cluster2.total)
     return cc, warp_matrix, combined
 
 
 def should_eliminate_cluster(cluster_no, total_clusters):
-    num_clusters_too_far = 0
+    num_images_too_far = 0
+    num_images_total = 0
     for c, (cc, warp_matrix, warped) in distances[cluster_no].items():
-        if cc < CORRELATION_THRESHOLD_FOR_DISMISSAL and clusters[c] is not None:
-            num_clusters_too_far = num_clusters_too_far + clusters[c].total
-            if num_clusters_too_far > FRACTION_OF_TOO_FAR_TO_ELIMINATE * total_clusters:
-                return True
+        if clusters[c] is not None:
+            num_images_total = num_images_total + clusters[c].total
+            if cc < CORRELATION_THRESHOLD_FOR_DISMISSAL:
+                num_images_too_far = num_images_too_far + clusters[c].total
+                if num_images_too_far > FRACTION_OF_TOO_FAR_TO_ELIMINATE * total_clusters:
+                    return True
+    if (num_images_too_far  > FRACTION_OF_TOO_FAR_TO_ELIMINATE * total_clusters and
+            num_images_too_far > FRACTION_OF_TOO_FAR_TO_ELIMINATE * num_images_total):
+        return True
     return False
 
 
 def main():
     db = tesseract_sql.DatabaseManager(sqlite_db)
     # letter = 'כ'  # 'ו'
-    letter = 'ת'  # ''
-
+    letter = 'א'  # ''
 
     # distance_matrix = read_create_distance_matrix(db, letter)
     images_sql = db.read_images_by_text_orderbyid(letter)
@@ -102,7 +121,6 @@ def main():
 
     init_clusters_and_distances(images_sql)
     processing_queue.extendleft(clusters.keys())
-
 
     current = processing_queue.pop()  # Initialize with first image from queue
     new_distances_calculated_in_loop = 0
@@ -218,15 +236,15 @@ def merge_distances(distances: SortedDict, cluster1: ImageCluster, cluster2: Ima
         # Each cluster_no is a possible known distance to another cluster
         (cc1, warp_matrix1, warped1) = dist_dict_1.pop(cluster_no, (0.0, None, None))
         (cc2, warp_matrix2, warped2) = dist_dict_2.pop(cluster_no, (0.0, None, None))
-        if (cc1>cc2):
+        if (cc1 > cc2):
             (cc, warp_matrix, warped) = (cc1, warp_matrix1, warped1)
         else:
             (cc, warp_matrix, warped) = (cc2, warp_matrix2, warped2)
 
-        dist_dict_result[cluster_no] =  (cc, warp_matrix, warped)
+        dist_dict_result[cluster_no] = (cc, warp_matrix, warped)
         if cluster_no in distances:
             distances[cluster_no].pop(cluster2.representative_id, 0.0)
-            distances[cluster_no][cluster1.representative_id] =  (cc, warp_matrix, warped)
+            distances[cluster_no][cluster1.representative_id] = (cc, warp_matrix, warped)
         else:
             # print(f'No distance for cluster {cluster_no}')
             pass
