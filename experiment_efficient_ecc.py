@@ -13,14 +13,13 @@ import cv2
 
 sqlite_db = r'.\letters.sqlite'
 
-LETTER = '.'
+LETTER = 'ם'
 
 CORRELATION_THRESHOLD_FOR_MERGE = 0.95
-CORRELATION_THRESHOLD_FOR_DISMISSAL = 0.8
+CORRELATION_THRESHOLD_FOR_DISMISSAL = 0.7
 FRACTION_OF_TOO_FAR_TO_ELIMINATE = 0.5
-ACCEPTABLE_EXTRA_DIFFERENCE_IN_DIMENSIONS = 0.2
+ACCEPTABLE_EXTRA_DIFFERENCE_IN_DIMENSIONS = 0.3  # 30%
 ACCEPTABLE_RATIO_OF_DIFFERENCE_IN_DIMENSIONS = 1.0 + ACCEPTABLE_EXTRA_DIFFERENCE_IN_DIMENSIONS
-
 
 clusters = SortedDict()  # All the clusters
 distances = SortedDict()
@@ -125,7 +124,7 @@ def main():
     next_processing_queue = collections.deque(maxlen=no_images + 1)
 
     init_clusters_and_distances(images_sql)
-    processing_queue.extendleft(clusters.keys())
+    processing_queue.extendleft(clusters.keys()) # Init the processing queue with all images
 
     current = processing_queue.pop()  # Initialize with first image from queue
     new_distances_calculated_in_loop = 0
@@ -145,7 +144,7 @@ def main():
             processing_queue = next_processing_queue
             next_processing_queue = collections.deque(maxlen=no_images + 1)  # Clear the queue
             current = next_cluster
-            if new_distances_calculated_in_loop == 0:
+            if new_distances_calculated_in_loop == 0: # A stop condition - nothing changed in this iteration
                 break
             continue
 
@@ -198,6 +197,12 @@ def main():
     print(f'cc={cc}')
     disp(tesseract_hebrew_utils.hconcat_resize_max(biggest_clusters_images, interpolation=cv2.INTER_CUBIC))
 
+    best_cluster: ImageCluster = clusters[list(biggest_clusters.keys())[0]]
+
+    non_aligned_images = [image_sql.image for image_sql in images_sql if
+                          image_sql.image_id not in best_cluster.source_images]
+    non_aligned_images = tesseract_hebrew_utils.pre_process_images(non_aligned_images, 1.0)
+    disp(tesseract_hebrew_utils.embed_images_in_square(non_aligned_images, 5))
     # print(distance_matrix)
     # print(distance_matrix.shape)
 
