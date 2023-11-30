@@ -9,7 +9,7 @@ from contextlib import closing
 
 import tesseract_hebrew_utils
 from tesseract_hebrew_utils import get_file_attributes
-
+from typing import Optional
 
 # Define a function to create a database connection
 def create_connection(database):
@@ -46,11 +46,11 @@ class Image:
     #     self.image = img
     #     self.image_hash = self.calculate_image_hash()
     #
-    def __init__(self, id, text, img, hash, decoding_fk):
+    def __init__(self, id, text, img, image_hash, decoding_fk=None):
         self.image_id = id
         self.image_text = text
         self.image = img
-        self.image_hash = hash
+        self.image_hash = image_hash
         if not self.image_hash:
             self.image_hash = self.calculate_image_hash()
         self.decoding_fk = decoding_fk
@@ -68,10 +68,11 @@ class Image:
 
 @dataclass
 class SubsDecoded:
-    subs_decoded_id: int
+    subs_decoded_id: Optional[int]
     sub_file_fk: int
     image_id_fk: int
     detected_char: str
+    char_index_in_text: int
     left: int
     right: int
     top: int
@@ -189,8 +190,8 @@ class DatabaseManager:
     def insert_subs_decoded(self, subs_decoded):
         with closing(self.conn.cursor()) as cursor:
             cursor.execute(
-                "INSERT INTO subs_decoded (sub_file_fk, image_id_fk, detected_char, [left], [right], top, bottom, page) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (subs_decoded.sub_file_fk, subs_decoded.image_id_fk, subs_decoded.detected_char, subs_decoded.left,
+                "INSERT INTO subs_decoded (sub_file_fk, image_id_fk, detected_char, char_index_in_text, [left], [right], top, bottom, page) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (subs_decoded.sub_file_fk, subs_decoded.image_id_fk, subs_decoded.detected_char, subs_decoded.char_index_in_text, subs_decoded.left,
                  subs_decoded.right, subs_decoded.top, subs_decoded.bottom, subs_decoded.page))
             self.conn.commit()
             inserted_id = cursor.lastrowid

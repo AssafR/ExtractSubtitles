@@ -27,14 +27,15 @@ def disp(img):
 
 class OcrBoxResult:
 
-    def __init__(self, img, row):
+    def __init__(self, img, results_text_row, char_index):
         self.img = img
         self.hImg, self.wImg, _ = self.img.shape
+        self.char_index_in_text = char_index
 
-        ocr_box_data = row.split()
+        ocr_box_data = results_text_row.split()
         self.detected_char, self.page = ocr_box_data[0], int(ocr_box_data[5])
-        self.left, self.top, self.right, self.bottom = int(ocr_box_data[1]), int(ocr_box_data[2]), int(
-            ocr_box_data[3]), int(ocr_box_data[4])
+        self.left, self.top, self.right, self.bottom = \
+            int(ocr_box_data[1]), int(ocr_box_data[2]), int(ocr_box_data[3]), int(ocr_box_data[4])
         self.calc_img_bottom = self.hImg - self.bottom
         self.calc_img_top = self.hImg - self.top
 
