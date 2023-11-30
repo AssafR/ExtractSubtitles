@@ -1,10 +1,11 @@
 import datetime
 import pathlib
-from dataclasses import dataclass, field
 import sqlite3
 import numpy as np
 import io
 import hashlib
+from dataclasses import dataclass, field
+from contextlib import closing
 
 import tesseract_hebrew_utils
 from tesseract_hebrew_utils import get_file_attributes
@@ -37,6 +38,7 @@ class Image:
     image_text: str
     image: np.ndarray  # Assuming the image is a numpy.ndarray
     image_hash: str  # New field
+    decoding_fk: int = None
 
     # def __init__(self, text, img):
     #     self.image_id = None
@@ -44,14 +46,14 @@ class Image:
     #     self.image = img
     #     self.image_hash = self.calculate_image_hash()
     #
-    def __init__(self, id, text, img, hash):
+    def __init__(self, id, text, img, hash, decoding_fk):
         self.image_id = id
         self.image_text = text
         self.image = img
         self.image_hash = hash
         if not self.image_hash:
             self.image_hash = self.calculate_image_hash()
-
+        self.decoding_fk = decoding_fk
 
     @classmethod
     def from_sql_query(cls, query_result):
@@ -112,102 +114,98 @@ class DatabaseManager:
         sqlite3.register_converter("array", lambda x: np.load(io.BytesIO(x)))
 
     def read_aspect_corrections(self):
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM aspect_corrections")
-        results = cursor.fetchall()
-        cursor.close()
+        with closing(self.conn.cursor()) as cursor:
+            cursor.execute("SELECT * FROM aspect_corrections")
+            results = cursor.fetchall()
         return [AspectCorrection.from_sql_query(row) for row in results]
 
     def read_images(self):
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM images")
-        results = cursor.fetchall()
-        cursor.close()
+        with closing(self.conn.cursor()) as cursor:
+            cursor.execute("SELECT * FROM images")
+            results = cursor.fetchall()
         return [Image.from_sql_query(row) for row in results]
 
-    def read_images_by_text_orderbyid(self, text):
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM images WHERE image_text=? ORDER BY image_id ASC",(text,))
-        results = cursor.fetchall()
-        cursor.close()
+    def read_images_by_text_orderbyid(self, text, from_subtitles=True):
+        addition = ''
+        if from_subtitles:
+            addition = 'WHERE decoding_fk IS NOT NULL'
+        else:
+            addition = 'WHERE decoding_fk IS NULL'
+
+        with closing(self.conn.cursor()) as cursor:
+            cursor.execute(f"SELECT * FROM images WHERE image_text=? AND {addition} ORDER BY image_id ASC", (text,))
+            results = cursor.fetchall()
         return [Image.from_sql_query(row) for row in results]
 
     def read_subs_decoded(self):
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM subs_decoded")
-        results = cursor.fetchall()
-        cursor.close()
+        with closing(self.conn.cursor()) as cursor:
+            cursor.execute("SELECT * FROM subs_decoded")
+            results = cursor.fetchall()
         return [SubsDecoded.from_sql_query(row) for row in results]
 
     def read_subs_files(self):
-        cursor = self.conn.cursor()
-        cursor.execute("SELECT * FROM subs_files")
-        results = cursor.fetchall()
-        cursor.close()
+        with closing(self.conn.cursor()) as cursor:
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT * FROM subs_files")
+            results = cursor.fetchall()
         return [SubsFiles.from_sql_query(row) for row in results]
 
     def insert_aspect_correction(self, aspect_correction):
-        cursor = self.conn.cursor()
-        cursor.execute("INSERT OR IGNORE INTO aspect_corrections (aspect) VALUES (?)", (aspect_correction.aspect,))
-        self.conn.commit()
-        cursor.execute("SELECT aspect_correction_id FROM aspect_corrections WHERE aspect = ?",
-                       (aspect_correction.aspect,))
-        result = cursor.fetchone()
-        cursor.close()
+        with closing(self.conn.cursor()) as cursor:
+            cursor.execute("INSERT OR IGNORE INTO aspect_corrections (aspect) VALUES (?)", (aspect_correction.aspect,))
+            self.conn.commit()
+            cursor.execute("SELECT aspect_correction_id FROM aspect_corrections WHERE aspect = ?",
+                           (aspect_correction.aspect,))
+            result = cursor.fetchone()
         if result:
             aspect_correction.aspect_correction_id = result[0]
             return aspect_correction
         return None
 
     def insert_image(self, image):
-        cursor = self.conn.cursor()
+        with closing(self.conn.cursor()) as cursor:
+            # Construct a raw SQL statement for INSERT OR IGNORE and SELECT
+            insert_sql = """
+            INSERT OR IGNORE INTO images (image_text, image, image_hash, decoding_fk)
+            VALUES (?, ?, ?, ?)
+            """
+            select_sql = """
+            SELECT * FROM images WHERE image_hash = ?
+            """
 
-        # Construct a raw SQL statement for INSERT OR IGNORE and SELECT
-        insert_sql = """
-        INSERT OR IGNORE INTO images (image_text, image, image_hash)
-        VALUES (?, ?, ?)
-        """
-        select_sql = """
-        SELECT * FROM images WHERE image_hash = ?
-        """
+            # Execute the INSERT OR IGNORE statement
+            cursor.execute(insert_sql, (image.image_text, image.image, image.image_hash, image.decoding_fk))
+            self.conn.commit()
 
-        # Execute the INSERT OR IGNORE statement
-        cursor.execute(insert_sql, (image.image_text, image.image, image.image_hash))
-        self.conn.commit()
-
-        # Query the database for the inserted or existing row
-        result = cursor.execute(select_sql, (image.image_hash,)).fetchone()
+            # Query the database for the inserted or existing row
+            result = cursor.execute(select_sql, (image.image_hash,)).fetchone()
         if result:
             # Close the cursor and return the row as an Image object
-            cursor.close()
             return Image(*result)
 
         # If no existing row found, close the cursor and return None
-        cursor.close()
         return None
 
     def insert_subs_decoded(self, subs_decoded):
-        cursor = self.conn.cursor()
-        cursor.execute(
-            "INSERT INTO subs_decoded (sub_file_fk, image_id_fk, detected_char, [left], [right], top, bottom, page) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-            (subs_decoded.sub_file_fk, subs_decoded.image_id_fk, subs_decoded.detected_char, subs_decoded.left,
-             subs_decoded.right, subs_decoded.top, subs_decoded.bottom, subs_decoded.page))
-        self.conn.commit()
-        inserted_id = cursor.lastrowid
-        cursor.close()
+        with closing(self.conn.cursor()) as cursor:
+            cursor.execute(
+                "INSERT INTO subs_decoded (sub_file_fk, image_id_fk, detected_char, [left], [right], top, bottom, page) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (subs_decoded.sub_file_fk, subs_decoded.image_id_fk, subs_decoded.detected_char, subs_decoded.left,
+                 subs_decoded.right, subs_decoded.top, subs_decoded.bottom, subs_decoded.page))
+            self.conn.commit()
+            inserted_id = cursor.lastrowid
         subs_decoded.subs_decoded_id = inserted_id
         return subs_decoded
 
     def insert_subs_files(self, subs_files):
-        cursor = self.conn.cursor()
-        cursor.execute("INSERT OR IGNORE INTO subs_files (file_name, directory_name, file_date) VALUES (?, ?, ?)",
-                       (subs_files.file_name, subs_files.directory_name, subs_files.file_date))
-        self.conn.commit()
-        cursor.execute(
-            "SELECT sub_file_id FROM subs_files WHERE file_name = ? AND directory_name = ? AND file_date = ?",
-            (subs_files.file_name, subs_files.directory_name, subs_files.file_date))
-        result = cursor.fetchone()
-        cursor.close()
+        with closing(self.conn.cursor()) as cursor:
+            cursor.execute("INSERT OR IGNORE INTO subs_files (file_name, directory_name, file_date) VALUES (?, ?, ?)",
+                           (subs_files.file_name, subs_files.directory_name, subs_files.file_date))
+            self.conn.commit()
+            cursor.execute(
+                "SELECT sub_file_id FROM subs_files WHERE file_name = ? AND directory_name = ? AND file_date = ?",
+                (subs_files.file_name, subs_files.directory_name, subs_files.file_date))
+            result = cursor.fetchone()
         if result:
             subs_files.sub_file_id = result[0]
             return subs_files
@@ -230,9 +228,16 @@ def convert_array(text):
     return np.load(out)
 
 
-def read_images_for_letter(db, letter):
-    images_sql = db.read_images_by_text_orderbyid(letter)
+def read_images_for_letter(db, letter, from_subtitles=True):
+    images_sql = db.read_images_by_text_orderbyid(letter, from_subtitles)
     # images_sql = sorted(images_sql, key=lambda x: x.image_id, reverse=False)
     images_raw = [img.image for img in images_sql]
     images = tesseract_hebrew_utils.pre_process_images(images_raw, 3.0)
     return images
+
+#
+
+# UPDATE images
+# SET decoding_fk = subs_decoded.subs_decoded_id
+# FROM subs_decoded
+# WHERE images.image_id = subs_decoded.image_id_fk;
