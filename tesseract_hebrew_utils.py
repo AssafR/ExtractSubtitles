@@ -12,7 +12,6 @@ import cv2
 from alignment import calc_average_similar_base
 
 TESSERACT_EXE = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
-BORDER_SIZE = 10
 
 
 class OcrBoxResult:
@@ -177,20 +176,6 @@ def resize_images_in_square(im_list, interpolation=cv2.INTER_CUBIC):
     for line_no in range(no_images_h):
         line_images = im_list_resize[line_no * no_images_h:(line_no + 1) * no_images_h]
         images_lines.append(cv2.hconcat(line_images))
-
-
-def pre_process_images(images, enlarge_ratio=None):
-    images_enlarged = [cv2.copyMakeBorder(  # Convert to Greyscale and add border
-        cv2.cvtColor(img, cv2.COLOR_BGR2GRAY),
-        BORDER_SIZE, BORDER_SIZE, BORDER_SIZE, BORDER_SIZE,
-        cv2.BORDER_CONSTANT, None, value=255)
-        for img in images]
-    images_enlarged = [255 - img for img in images_enlarged]  # Convert to negative (White on Black)
-    if enlarge_ratio is not None:
-        images_enlarged = [cv2.resize(img, None, fx=enlarge_ratio, fy=enlarge_ratio,
-                                      interpolation=cv2.INTER_CUBIC)
-                           for img in images_enlarged]
-    return images_enlarged
 
 
 class SubtitleDataFromFile(object):

@@ -31,7 +31,7 @@ def main():
     images_sql = sorted(images_sql_unsorted, key=lambda x: x.image_id, reverse=False)
     images = [img.image for img in images_sql]
 
-    images_enlarged = tesseract_hebrew_utils.pre_process_images(images[0:10], 2.0)
+    images_enlarged = utils.pre_process_images(images[0:10], 2.0)
 
     all_images = tesseract_hebrew_utils.embed_images_in_square(images_enlarged, 6)
     disp(all_images)

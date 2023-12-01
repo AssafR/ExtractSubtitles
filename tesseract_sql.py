@@ -10,6 +10,8 @@ from contextlib import closing
 import tesseract_hebrew_utils
 from typing import Optional
 
+import utils
+
 
 # Define a function to create a database connection
 def create_connection(database):
@@ -234,7 +236,7 @@ def read_images_for_letter(db, letter, from_subtitles=True):
     images_sql = db.read_images_by_text_orderbyid(letter, from_subtitles)
     # images_sql = sorted(images_sql, key=lambda x: x.image_id, reverse=False)
     images_raw = [img.image for img in images_sql]
-    images = tesseract_hebrew_utils.pre_process_images(images_raw, 3.0)
+    images = utils.pre_process_images(images_raw, 3.0)
     return images
 
 #
