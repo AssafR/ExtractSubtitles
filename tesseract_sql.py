@@ -8,8 +8,8 @@ from dataclasses import dataclass, field
 from contextlib import closing
 
 import tesseract_hebrew_utils
-from tesseract_hebrew_utils import get_file_attributes
 from typing import Optional
+
 
 # Define a function to create a database connection
 def create_connection(database):
@@ -127,14 +127,14 @@ class DatabaseManager:
         return [Image.from_sql_query(row) for row in results]
 
     def read_images_by_text_orderbyid(self, text, from_subtitles=True):
-        addition = ''
         if from_subtitles:
-            addition = 'WHERE decoding_fk IS NOT NULL'
+            subs_condition = 'decoding_fk IS NULL'
         else:
-            addition = 'WHERE decoding_fk IS NULL'
+            subs_condition = 'decoding_fk IS NOT NULL'
 
         with closing(self.conn.cursor()) as cursor:
-            cursor.execute(f"SELECT * FROM images WHERE image_text=? AND {addition} ORDER BY image_id ASC", (text,))
+            cursor.execute(f"SELECT * FROM images WHERE image_text=? AND {subs_condition} ORDER BY image_id ASC",
+                           (text,))
             results = cursor.fetchall()
         return [Image.from_sql_query(row) for row in results]
 
@@ -191,7 +191,8 @@ class DatabaseManager:
         with closing(self.conn.cursor()) as cursor:
             cursor.execute(
                 "INSERT INTO subs_decoded (sub_file_fk, image_id_fk, detected_char, char_index_in_text, [left], [right], top, bottom, page) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (subs_decoded.sub_file_fk, subs_decoded.image_id_fk, subs_decoded.detected_char, subs_decoded.char_index_in_text, subs_decoded.left,
+                (subs_decoded.sub_file_fk, subs_decoded.image_id_fk, subs_decoded.detected_char,
+                 subs_decoded.char_index_in_text, subs_decoded.left,
                  subs_decoded.right, subs_decoded.top, subs_decoded.bottom, subs_decoded.page))
             self.conn.commit()
             inserted_id = cursor.lastrowid

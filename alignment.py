@@ -3,23 +3,14 @@
 import cv2
 import numpy as np
 import copy
-import utils
 from dataclasses import dataclass, field
-
-MINIMUM_ACCEPTED_CC = 0.9
+from utils import transform_ecc
 
 orb = cv2.ORB_create(
     nfeatures=500,
     scaleFactor=1.2,
     scoreType=cv2.ORB_HARRIS_SCORE)
 
-
-def weighted_average(img1, img2, weight1, weight2):
-    assert img1.shape == img2.shape, "Images must have the same shape"
-    all_weight = weight1 + weight2
-    img_combined_float = weight1 * img1.astype(np.float64) + (all_weight - weight1) * img2.astype(np.float64)
-    img_combined_int = (img_combined_float / all_weight).astype(np.uint8)
-    return img_combined_int
 
 
 class FeatureExtraction:
@@ -93,61 +84,6 @@ def scale_convert_image(img: np.ndarray, scale_percent=200) -> np.ndarray:
     return im_resized
 
 
-@utils.CallCountDecorator
-def transform_ECC(im1: np.ndarray, im2: np.ndarray) -> (float, np.ndarray, np.ndarray):
-    # Source:  https://stackoverflow.com/questions/68497827/cv2-findtransformecc-how-to-ignore-small-particles
-
-    convMode = "up"
-    num_iterations = 1000
-    corr_coeff = 1e-5  # 0.5
-
-    # Find size of image1
-    img_size = im1.shape
-
-    # Define the motion model
-    if convMode != "down":
-        warp_mode = cv2.MOTION_EUCLIDEAN
-    else:
-        warp_mode = cv2.MOTION_HOMOGRAPHY
-
-    # Define 2x3 or 3x3 matrices and initialize the matrix to identity
-    if warp_mode == cv2.MOTION_HOMOGRAPHY:
-        warp_matrix = np.eye(3, 3, dtype=np.float32)
-    else:
-        warp_matrix = np.eye(2, 3, dtype=np.float32)
-
-    # Specify the number of iterations.
-    number_of_iterations = int(num_iterations);
-
-    # Specify the threshold of the increment
-    # in the correlation coefficient between two iterations
-    termination_eps = float(corr_coeff)
-
-    # Define termination criteria
-    criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, number_of_iterations, termination_eps)
-
-    # Run the ECC algorithm. The results are stored in warp_matrix.
-    try:
-        (cc, warp_matrix) = cv2.findTransformECC(im1, im2, warp_matrix, warp_mode, criteria)
-        # print(f'cc={cc}')
-        assert cc >= MINIMUM_ACCEPTED_CC, "Correlation too low"
-        if warp_mode == cv2.MOTION_HOMOGRAPHY:
-            # Use warpPerspective for Homography
-            im2_aligned = cv2.warpPerspective(im2, warp_matrix, (img_size[1], img_size[0]),
-                                              flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
-        else:
-            # Use warpAffine for Translation, Euclidean and Affine
-            im2_aligned = cv2.warpAffine(im2, warp_matrix, (img_size[1], img_size[0]),
-                                         flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP);
-
-        cc = 1.0 - abs(1.0 - cc)  # Special fix: Handle case where cc>1 , wrap back from 1
-        return cc, warp_matrix, im2_aligned
-    except cv2.error as e:
-        return 0.0, None, im1
-    except AssertionError as e:
-        return 0.0, None, im1
-
-
 def calc_average_similar_base(base_index, images_enlarged):
     base_image = images_enlarged[base_index]
     sum_images = 0  #
@@ -157,7 +93,7 @@ def calc_average_similar_base(base_index, images_enlarged):
         if img_no == base_index:  # Optimize
             cc, warp_matrix, warped = 1.0, 1.0, base_image
         else:
-            cc, warp_matrix, warped = transform_ECC(base_image, img)
+            cc, warp_matrix, warped = transform_ecc(base_image, img)
 
         if warp_matrix is not None:
             # warped = cv2.cvtColor(warped, cv2.COLOR_GRAY2BGR)
@@ -214,7 +150,7 @@ def find_best_average_image_improved(images):
                 continue
             if distance_matrix[row, column] > 0.0 or np.isnan(distance_matrix[row, column]):  # Already calculated
                 continue
-            cc, warp_matrix, warped = transform_ECC(img_row, img_column)
+            cc, warp_matrix, warped = transform_ecc(img_row, img_column)
             if warp_matrix is None or cc <= 0.0:
                 cc = np.nan  # Value to fill
                 warped = None

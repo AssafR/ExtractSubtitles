@@ -6,6 +6,8 @@ from pathlib import Path
 
 import tesseract_sql
 
+BOX_ENLARGE_FACTOR = 1.2
+
 sqlite_db = r'.\letters2.sqlite'
 ASPECT_RATIO_CORRECTION = 2.0
 TESSERACT_CUSTOM_CONFIG_STR = r'--oem 3 --psm 6 -l heb'
@@ -96,7 +98,7 @@ def perform_ocr_api_save_to_db(db: tesseract_sql.DatabaseManager,
 
         tmp_img = full_img.copy()
 
-        char_box, char_box_enlarged = ocr_box_result.extract_box_from_image(enlarge_factor=1.2)
+        char_box, char_box_enlarged = ocr_box_result.extract_box_from_image(enlarge_factor=BOX_ENLARGE_FACTOR)
         img_data = tesseract_sql.Image(id=None, text=ocr_box_result.detected_char, img=char_box, image_hash=None,
                                        decoding_fk=None)
         # Store image in dataclass

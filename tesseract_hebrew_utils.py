@@ -1,7 +1,5 @@
 import re
 import pytesseract
-import os.path
-import datetime
 import math
 import numpy as np
 from pathlib import Path
@@ -16,14 +14,6 @@ from alignment import calc_average_similar_base
 TESSERACT_EXE = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 BORDER_SIZE = 10
 
-
-def view_image_wait_key(img):
-    cv2.imshow('img', img)
-    cv2.waitKey(0)
-    cv2.destroyAllWindows()
-
-def disp(img):
-    view_image_wait_key(img)
 
 class OcrBoxResult:
 
@@ -57,7 +47,7 @@ class OcrBoxResult:
         char_box_enlarged = self.img[self.hImg - new_bottom:self.hImg - new_top, new_left:new_right].copy()
 
         # view_image_wait_key(char_box_enlarged)
-        print('-----')
+        # print('-----')
 
         return char_box_original, char_box_enlarged
 
@@ -113,19 +103,6 @@ def image_to_boxes_keep_same(
 
 
 #######################
-
-def get_file_date(file_name: Path):
-    if os.path.exists(file_name):
-        creation_timestamp = os.path.getctime(file_name)
-        creation_datetime = datetime.datetime.fromtimestamp(creation_timestamp)
-        return creation_datetime
-    else:
-        return None
-
-
-def get_file_attributes(file_name):
-    file_path = Path(file_name)
-    return str(file_path.name), str(file_path.parent), get_file_date(file_name)
 
 
 def perform_ocr_commandline(jpgfile, txt_filename, tesseract_exe=TESSERACT_EXE):

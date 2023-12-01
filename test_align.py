@@ -5,7 +5,10 @@ from matplotlib import pyplot as plt
 from PIL import Image
 import numpy as np
 import copy
-from alignment import FeatureExtraction, feature_matching, transform_ECC, AverageImageStat, calc_average_similar_base
+
+import utils
+from alignment import FeatureExtraction, feature_matching, AverageImageStat, calc_average_similar_base
+from utils import transform_ecc
 
 sqlite_db = r'.\letters.sqlite'
 
@@ -19,7 +22,7 @@ sqlite_db = r'.\letters.sqlite'
 
 def disp(img):
     # display(Image.fromarray(all_images))
-    tesseract_hebrew_utils.view_image_wait_key(img)
+    utils.view_image_wait_key(img)
 
 
 def main():
