@@ -1,10 +1,25 @@
 import collections
-
 import numpy as np
 from sortedcontainers import SortedDict
 
 from utils import ImageCluster, pre_process_images, append_left_if_doesnt_exist, CORRELATION_THRESHOLD_FOR_MERGE, \
     images_too_different_in_size, transform_ecc, CORRELATION_THRESHOLD_FOR_DISMISSAL, FRACTION_OF_TOO_FAR_TO_ELIMINATE
+
+
+class RegistrationResult(object):
+    def __init__(self, img1, img2):
+        if img1 is float:
+            cc = img1
+            (self.cc, self.warp_matrix, self.warped) = (cc, None, None)
+        if img1 is None or images_too_different_in_size(img1, img2):
+            (self.cc, self.warp_matrix, self.warped) = (0.0, None, None)
+        else:
+            (self.cc, self.warp_matrix, self.warped) = transform_ecc(img1, img2)
+
+    def update(self, cc, warp_matrix, warped):
+        self.cc = cc
+        self.warp_matrix = warp_matrix
+        self.warped = warped
 
 
 class ClusterManager():
@@ -87,6 +102,13 @@ class ClusterManager():
                     append_left_if_doesnt_exist(self.next_processing_queue, next_cluster)
             else:
                 append_left_if_doesnt_exist(self.next_processing_queue, next_cluster)
+
+        # Finished the clustering, now need to find the biggest clusters
+        final_clusters = {k: v for k, v in self.clusters.items() if v is not None}
+        sorted_clusters_by_total = sorted(final_clusters.items(), key=lambda x: x[1].total, reverse=True)
+        biggest_clusters = dict(sorted_clusters_by_total)
+        self.clusters = biggest_clusters  # Now sorted by total!
+
         return self.base_images_sql, self.no_images
 
     def merge_distances(self, distances: SortedDict, cluster1: ImageCluster, cluster2: ImageCluster):
@@ -112,7 +134,7 @@ class ClusterManager():
             # Each cluster_no is a possible known distance to another cluster
             (cc1, warp_matrix1, warped1) = dist_dict_1.pop(cluster_no, (0.0, None, None))
             (cc2, warp_matrix2, warped2) = dist_dict_2.pop(cluster_no, (0.0, None, None))
-            if (cc1 > cc2):
+            if cc1 > cc2:
                 (cc, warp_matrix, warped) = (cc1, warp_matrix1, warped1)
             else:
                 (cc, warp_matrix, warped) = (cc2, warp_matrix2, warped2)
@@ -126,8 +148,9 @@ class ClusterManager():
                 pass
         # Now there's a new combined dictionary with the best correlation of the two groups
 
-        distances.pop(cluster2.representative_id, 0.0)
-        distances[cluster1.representative_id] = dist_dict_result
+        distances.pop(cluster2.representative_id, 0.0)  # Remove the cluster that was merged
+        distances[cluster1.representative_id] = dist_dict_result  # Add the new combined cluster
+        # TODO: Update all the other clusters that point to cluster2 to point to cluster1 instead
 
         return dist_dict_result
 
@@ -153,27 +176,25 @@ class ClusterManager():
         if row == column:
             return 1.0, True
         cached = False
-        cached_cc, _, _ = distances_dict[row].get(column, (None, None, None))
-        if cached_cc is not None:
+        possibly_cached_registration = distances_dict[row].get(column, RegistrationResult(None, None))
+        if possibly_cached_registration.cc is not None: # Cached value
             # print(f'     Cache hit for {row},{column} is {cached_cc}')
             cached = True
-            cc = cached_cc
-        else:
-            if images_too_different_in_size(self.clusters[row].avg_img, self.clusters[column].avg_img):
-                (cc, warp_matrix, warped) = (0.0, None, None)
-            else:
-                cc, warp_matrix, warped = transform_ecc(self.clusters[row].avg_img, self.clusters[column].avg_img)
-            distances_dict[row][column] = (cc, warp_matrix, warped)
-            distances_dict[column][row] = (cc, warp_matrix, warped)
+            cc = possibly_cached_registration.cc
+        else: # Not cached value
+            result = RegistrationResult(self.clusters[row].avg_img, self.clusters[column].avg_img)
+            distances_dict[row][column] = result
+            distances_dict[column][row] = result
+            cc = result.cc
         return cc, cached
 
     def should_eliminate_cluster(self, cluster_no, total_clusters):
         num_images_too_far = 0
         num_images_total = 0
-        for c, (cc, warp_matrix, warped) in self.distances[cluster_no].items():
+        for c, registration_result in self.distances[cluster_no].items():
             if self.clusters[c] is not None:
                 num_images_total = num_images_total + self.clusters[c].total
-                if cc < CORRELATION_THRESHOLD_FOR_DISMISSAL:
+                if registration_result.cc < CORRELATION_THRESHOLD_FOR_DISMISSAL:
                     num_images_too_far = num_images_too_far + self.clusters[c].total
                     if num_images_too_far > FRACTION_OF_TOO_FAR_TO_ELIMINATE * total_clusters:
                         return True

@@ -27,6 +27,27 @@ def view_image_wait_key(img):
     cv2.destroyAllWindows()
 
 
+def trim_to_smallest_rectangle(original_image):
+    # Read the image
+    # Threshold the image to get a binary image
+    _, binary_image = cv2.threshold(original_image, 1, 255, cv2.THRESH_BINARY)
+
+    # Find contours in the binary image
+    contours, _ = cv2.findContours(binary_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+
+    if not contours:
+        # If no contours found, return the original image
+        return original_image
+
+    # Find the bounding box of the contours
+    x, y, w, h = cv2.boundingRect(contours[0])
+
+    # Crop the image to the bounding box
+    trimmed_image = original_image[y:y + h, x:x + w]
+
+    return trimmed_image
+
+
 class CallCountDecorator:
     """
     A decorator that will count and print how many times the decorated function was called
@@ -167,7 +188,6 @@ def get_file_date(file_name: Path):
         return creation_datetime
     else:
         return None
-
 
 
 def pre_process_images(images, enlarge_ratio=None):
