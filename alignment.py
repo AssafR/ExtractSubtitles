@@ -8,7 +8,7 @@ from utils import transform_ecc
 
 orb = cv2.ORB_create(
     nfeatures=500,
-    scaleFactor=1.2,
+    scaleFactor=1.5,
     scoreType=cv2.ORB_HARRIS_SCORE)
 
 
@@ -23,7 +23,6 @@ class FeatureExtraction:
             self.img, self.kps, 0, \
             flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
         self.matched_pts = []
-
 
 @dataclass(order=True)
 class AverageImageStat:

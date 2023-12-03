@@ -1,20 +1,30 @@
 import collections
+
+import cv2
 import numpy as np
 from sortedcontainers import SortedDict
+from typing import List
 
+import tesseract_hebrew_utils
+from tesseract_sql import Image
 from utils import ImageCluster, pre_process_images, append_left_if_doesnt_exist, CORRELATION_THRESHOLD_FOR_MERGE, \
-    images_too_different_in_size, transform_ecc, CORRELATION_THRESHOLD_FOR_DISMISSAL, FRACTION_OF_TOO_FAR_TO_ELIMINATE
+    images_too_different_in_size, transform_ecc, CORRELATION_THRESHOLD_FOR_DISMISSAL, FRACTION_OF_TOO_FAR_TO_ELIMINATE, \
+    disp, trim_to_smallest_rectangle, invert_images, BORDER_SIZE
 
 
 class RegistrationResult(object):
-    def __init__(self, img1, img2):
-        if img1 is float:
-            cc = img1
+    def __init__(self, template_image, target_image):
+        """
+        Using transform_ecc, transform target_image onto template_image.
+        Also calculate the correlation coefficient between the two images and the warp matrix.
+        """
+        if isinstance(template_image, float):  # Special case, initialize with distance and no images
+            cc = template_image
             (self.cc, self.warp_matrix, self.warped) = (cc, None, None)
-        if img1 is None or images_too_different_in_size(img1, img2):
+        elif template_image is None or images_too_different_in_size(template_image, target_image):
             (self.cc, self.warp_matrix, self.warped) = (0.0, None, None)
         else:
-            (self.cc, self.warp_matrix, self.warped) = transform_ecc(img1, img2)
+            (self.cc, self.warp_matrix, self.warped) = transform_ecc(template_image, target_image)
 
     def update(self, cc, warp_matrix, warped):
         self.cc = cc
@@ -24,9 +34,9 @@ class RegistrationResult(object):
 
 class ClusterManager():
     def __init__(self, images_sql):
-        self.base_images_sql = images_sql
+        self.base_images_sql: List[Image] = images_sql  # Note: Original images are black-on-white RGB
         self.no_images = len(images_sql)
-        self.clusters = SortedDict()  # All the clusters
+        self.clusters = SortedDict()  # Dictionary of clusters, with key=representative_id, value=ImageCluster
         self.distances = SortedDict()
         self.init_clusters_and_distances(self.base_images_sql)
         self.processing_queue = collections.deque(maxlen=self.no_images + 1)
@@ -40,14 +50,22 @@ class ClusterManager():
         # Initialize
         for img_serial_no, img_sql in enumerate(images_sql):
             image_id = img_sql.image_id  # img_serial_no  #
-            process_image = pre_process_images([img_sql.image])[0]
+            process_image = pre_process_images([img_sql.image], 2.0, BORDER_SIZE,True)[0]
+            # Also convert the image to white-on-black
             image_singleton_cluster = ImageCluster(total=1, avg_cc=0.0, representative_id=image_id,
                                                    avg_img=process_image, source_images=[image_id])
             self.clusters[image_id] = image_singleton_cluster
             self.distances[image_id] = SortedDict()
-            self.distances[image_id][image_id] = (1.0, None, None)
+            self.distances[image_id][image_id] = RegistrationResult(1.0, None)
+
+    def adjust_image_post_process(self, image):
+        _, image_blur = cv2.threshold(image, thresh=40, maxval=255, type=cv2.THRESH_BINARY)
+        # avg_blur = cv2.medianBlur(avg_blur, 15)
+        image_blur = cv2.GaussianBlur(image_blur, (9, 9), 10)
+        return image_blur
 
     def cluster_letters(self):
+        # At the beginning of the loop, processing_queue contains all the clusters
         current = self.processing_queue.pop()  # Initialize with first image from queue
         new_distances_calculated_in_loop = 0
         while len(self.processing_queue) > 0:  # and len(next_processing_queue) > 0:
@@ -64,7 +82,7 @@ class ClusterManager():
                 current = None
 
             if len(self.processing_queue) == 0:  # Queue is empty
-                processing_queue = self.next_processing_queue
+                self.processing_queue = self.next_processing_queue
                 self.next_processing_queue = collections.deque(maxlen=self.no_images + 1)  # Clear the queue
                 current = next_cluster
                 if new_distances_calculated_in_loop == 0:  # A stop condition - nothing changed in this iteration
@@ -86,8 +104,8 @@ class ClusterManager():
             if not cached:  # A new value was calculated
                 new_distances_calculated_in_loop = new_distances_calculated_in_loop + 1
             if np.isnan(cc):
-                self.distances[current][next_cluster] = (0.0, None, None)
-                self.distances[next_cluster][current] = (0.0, None, None)
+                self.distances[current][next_cluster] = RegistrationResult(0.0, None)
+                self.distances[next_cluster][current] = RegistrationResult(0.0, None)
                 append_left_if_doesnt_exist(self.next_processing_queue, next_cluster)
                 continue
             elif cc > CORRELATION_THRESHOLD_FOR_MERGE:
@@ -108,6 +126,21 @@ class ClusterManager():
         sorted_clusters_by_total = sorted(final_clusters.items(), key=lambda x: x[1].total, reverse=True)
         biggest_clusters = dict(sorted_clusters_by_total)
         self.clusters = biggest_clusters  # Now sorted by total!
+
+        average_image: ImageCluster = list(self.clusters.values())[0]
+        average_image_trimmed = self.adjust_image_post_process(average_image.avg_img)
+        average_image_trimmed = trim_to_smallest_rectangle(average_image_trimmed)
+        average_image_trimmed = pre_process_images([average_image_trimmed], 1 / 2.0, 0, False)[0]
+
+        all_src_images = [sql_img.image for sql_img in self.base_images_sql]
+        # all_src_images = pre_process_images(all_src_images, 2.0)
+        source_images_square = tesseract_hebrew_utils.embed_images_in_square(all_src_images, 5, 'Source Images')
+        all_images_on_registered = [RegistrationResult(src_img, average_image_trimmed) for src_img in invert_images(all_src_images)]
+        all_images_on_representative = invert_images([reg.warped for reg in all_images_on_registered if reg.warped is not None])
+        registered_images_square = tesseract_hebrew_utils.embed_images_in_square(all_images_on_representative, 5, 'Registered Images')
+        # all_images_diff = [np.abs(reg - average_image_trimmed) for reg in all_images_on_representative if reg is not None]
+        disp(cv2.hconcat([source_images_square,registered_images_square, abs(source_images_square-registered_images_square)]))
+        # disp(tesseract_hebrew_utils.embed_images_in_square(all_images_diff, 5))
 
         return self.base_images_sql, self.no_images
 
@@ -132,17 +165,17 @@ class ClusterManager():
         combined_clusters = set(dist_dict_1.keys()).union(set(dist_dict_2.keys()))
         for cluster_no in combined_clusters:  # Note: This will destroy the original dictionaries
             # Each cluster_no is a possible known distance to another cluster
-            (cc1, warp_matrix1, warped1) = dist_dict_1.pop(cluster_no, (0.0, None, None))
-            (cc2, warp_matrix2, warped2) = dist_dict_2.pop(cluster_no, (0.0, None, None))
-            if cc1 > cc2:
-                (cc, warp_matrix, warped) = (cc1, warp_matrix1, warped1)
+            warp_result_1 = dist_dict_1.pop(cluster_no, RegistrationResult(0.0, None))
+            warp_result_2 = dist_dict_2.pop(cluster_no, RegistrationResult(0.0, None))
+            if warp_result_1.cc > warp_result_2.cc:
+                warp_result = warp_result_1
             else:
-                (cc, warp_matrix, warped) = (cc2, warp_matrix2, warped2)
+                warp_result = warp_result_2
 
-            dist_dict_result[cluster_no] = (cc, warp_matrix, warped)
+            dist_dict_result[cluster_no] = warp_result
             if cluster_no in distances:
                 distances[cluster_no].pop(cluster2.representative_id, 0.0)
-                distances[cluster_no][cluster1.representative_id] = (cc, warp_matrix, warped)
+                distances[cluster_no][cluster1.representative_id] = warp_result
             else:
                 # print(f'No distance for cluster {cluster_no}')
                 pass
@@ -176,12 +209,12 @@ class ClusterManager():
         if row == column:
             return 1.0, True
         cached = False
-        possibly_cached_registration = distances_dict[row].get(column, RegistrationResult(None, None))
-        if possibly_cached_registration.cc is not None: # Cached value
+        possibly_cached_registration = distances_dict[row].get(column, None)
+        if possibly_cached_registration is not None:  # Cached value
             # print(f'     Cache hit for {row},{column} is {cached_cc}')
             cached = True
             cc = possibly_cached_registration.cc
-        else: # Not cached value
+        else:  # Not cached value
             result = RegistrationResult(self.clusters[row].avg_img, self.clusters[column].avg_img)
             distances_dict[row][column] = result
             distances_dict[column][row] = result

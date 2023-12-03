@@ -4,6 +4,7 @@ import math
 import numpy as np
 from pathlib import Path
 
+from cv2 import FONT_HERSHEY_PLAIN
 from pytesseract import Output, run_and_get_output
 from subprocess import check_output
 
@@ -124,7 +125,7 @@ def insert_image(base_image, small_image, y, x):
     base_image[y:y + small_image.shape[0], x:x + small_image.shape[1]] = small_image
 
 
-def embed_images_in_square(im_list, spacing):
+def embed_images_in_square(im_list, spacing, text=None):
     # Assumption: Images are roughly the same size
     h_max = max(im.shape[0] for im in im_list)
     w_max = max(im.shape[1] for im in im_list)
@@ -133,14 +134,22 @@ def embed_images_in_square(im_list, spacing):
     h_total = (h_max + spacing) * no_lines + spacing
     w_total = (w_max + spacing) * images_in_line + spacing
 
-    output_img = np.zeros((h_total, w_total), dtype=np.uint8)  # Black
-    output_img[:, :] = 255
+    if len(im_list[0].shape)==3:
+        output_img = np.zeros((h_total, w_total,3), dtype=np.uint8)  # Black
+        output_img[:, :, :] = 255
+    else:
+        output_img = np.zeros((h_total, w_total), dtype=np.uint8)  # Black
+        output_img[:, :] = 255
 
     for image_no, image in enumerate(im_list):
         img_row, img_col = divmod(image_no, images_in_line)
         img_pos_y = spacing + img_row * (h_max + spacing)
         img_pos_x = spacing + img_col * (w_max + spacing)
         insert_image(output_img, image, img_pos_y, img_pos_x)
+
+    if text:
+        cv2.putText(output_img, text, (16,16), fontFace=FONT_HERSHEY_PLAIN, fontScale=1.5,
+                    color=(0,255,0), thickness=2)
 
     return output_img
 

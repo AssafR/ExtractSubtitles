@@ -30,7 +30,7 @@ def view_image_wait_key(img):
 def trim_to_smallest_rectangle(original_image):
     # Read the image
     # Threshold the image to get a binary image
-    _, binary_image = cv2.threshold(original_image, 1, 255, cv2.THRESH_BINARY)
+    _, binary_image = cv2.threshold(original_image, 128, 255, cv2.THRESH_BINARY)
 
     # Find contours in the binary image
     contours, _ = cv2.findContours(binary_image, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
@@ -67,15 +67,21 @@ class CallCountDecorator:
 
 
 @CallCountDecorator
-def transform_ecc(im1: np.ndarray, im2: np.ndarray) -> (float, np.ndarray, np.ndarray):
-    # Source:  https://stackoverflow.com/questions/68497827/cv2-findtransformecc-how-to-ignore-small-particles
+def transform_ecc(template_image: np.ndarray, input_image: np.ndarray) -> (float, np.ndarray, np.ndarray):
+    """
+    template_image: The "base" image
+    input_image: The "target" image
+    If possible, align input_image onto template_image
+    Returns: cc, warp_matrix, input_image_aligned
+    Source:  https://stackoverflow.com/questions/68497827/cv2-findtransformecc-how-to-ignore-small-particles
+    """
 
     convMode = "down"  # "up"
     num_iterations = 1000
     corr_coeff = 1e-5  # 0.5
 
     # Find size of image1
-    img_size = im1.shape
+    template_img_size = template_image.shape
 
     # Define the motion model
     if convMode != "down":
@@ -101,24 +107,25 @@ def transform_ecc(im1: np.ndarray, im2: np.ndarray) -> (float, np.ndarray, np.nd
 
     # Run the ECC algorithm. The results are stored in warp_matrix.
     try:
-        (cc, warp_matrix) = cv2.findTransformECC(im1, im2, warp_matrix, warp_mode, criteria)
+        (cc, warp_matrix) = cv2.findTransformECC(template_image, input_image, warp_matrix, warp_mode, criteria)
+        # Warp the input_image to be similar to template_image
         # print(f'cc={cc}')
         assert cc >= MINIMUM_ACCEPTED_CC, "Correlation too low"
         if warp_mode == cv2.MOTION_HOMOGRAPHY:
             # Use warpPerspective for Homography
-            im2_aligned = cv2.warpPerspective(im2, warp_matrix, (img_size[1], img_size[0]),
-                                              flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
+            input_image_aligned = cv2.warpPerspective(input_image, warp_matrix, (template_img_size[1], template_img_size[0]),
+                                                      flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
         else:
             # Use warpAffine for Translation, Euclidean and Affine
-            im2_aligned = cv2.warpAffine(im2, warp_matrix, (img_size[1], img_size[0]),
-                                         flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP);
+            input_image_aligned = cv2.warpAffine(input_image, warp_matrix, (template_img_size[1], template_img_size[0]),
+                                                 flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP);
 
         cc = 1.0 - abs(1.0 - cc)  # Special fix: Handle case where cc>1 , wrap back from 1
-        return cc, warp_matrix, im2_aligned
+        return cc, warp_matrix, input_image_aligned
     except cv2.error as e:
-        return 0.0, None, im1
+        return 0.0, None, template_image
     except AssertionError as e:
-        return 0.0, None, im1
+        return 0.0, None, template_image
 
 
 @dataclass(order=True)  # , eq=False
@@ -190,7 +197,29 @@ def get_file_date(file_name: Path):
         return None
 
 
-def pre_process_images(images, enlarge_ratio=None):
+def pre_process_images(images, enlarge_ratio=None, border_size=BORDER_SIZE, invert=True):
+    if len(images[0].shape) == 3: # Concert to Greyscale if not already
+        images = [cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) for img in images]
+    images_enlarged = [cv2.copyMakeBorder(  # Convert to Greyscale and add border
+        img,
+        border_size, border_size, border_size, border_size,
+        cv2.BORDER_CONSTANT, None, value=255)
+        for img in images]
+    if invert:
+        images_enlarged = invert_images(images_enlarged)
+    if enlarge_ratio is not None:
+        images_enlarged = [cv2.resize(img, None, fx=enlarge_ratio, fy=enlarge_ratio,
+                                      interpolation=cv2.INTER_CUBIC)
+                           for img in images_enlarged]
+    return images_enlarged
+
+
+def invert_images(images):
+    images = [255 - img for img in images]  # Convert to negative (White on Black)
+    return images
+
+
+def reverse_pre_process_images(images, enlarge_ratio=None):
     images_enlarged = [cv2.copyMakeBorder(  # Convert to Greyscale and add border
         cv2.cvtColor(img, cv2.COLOR_BGR2GRAY),
         BORDER_SIZE, BORDER_SIZE, BORDER_SIZE, BORDER_SIZE,
