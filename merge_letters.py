@@ -34,10 +34,10 @@ def main():
 
     images_sql, no_images, cluster_manager = create_representative_letter(db, letter)
 
-    display_letter_results(images_sql, no_images, cluster_manager.clusters)
+    display_letter_results(images_sql, no_images, cluster_manager.clusters, cluster_manager.avg_image)
 
 
-def display_letter_results(images_sql, no_images, largest_clusters):
+def display_letter_results(images_sql, no_images, largest_clusters, image):
     print(f'Final clusters: ')
     for cluster_no in largest_clusters.keys():
         if largest_clusters[cluster_no]:
@@ -49,7 +49,8 @@ def display_letter_results(images_sql, no_images, largest_clusters):
     biggest_clusters_images.append(biggest_clusters_images[0])  # Handle the edge case of size 1
     cc, warp_matrix, im_aligned = transform_ecc(biggest_clusters_images[0], biggest_clusters_images[1])
     print(f'cc={cc}')
-    disp(tesseract_hebrew_utils.hconcat_resize_max(biggest_clusters_images, interpolation=cv2.INTER_CUBIC))
+    disp(image)
+    disp(tesseract_hebrew_utils.hconcat_resize_max(biggest_clusters_images + [image], interpolation=cv2.INTER_CUBIC))
     best_cluster: ImageCluster = largest_clusters[list(largest_clusters.keys())[0]]
     non_aligned_images = [image_sql.image for image_sql in images_sql if
                           image_sql.image_id not in best_cluster.source_images]

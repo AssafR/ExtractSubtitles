@@ -42,6 +42,7 @@ class ClusterManager():
         self.processing_queue = collections.deque(maxlen=self.no_images + 1)
         self.next_processing_queue = collections.deque(maxlen=self.no_images + 1)
         self.processing_queue.extendleft(self.clusters.keys())  # Init the processing queue with all images
+        self.avg_image = None
 
     def init_clusters_and_distances(self, images_sql):
         image_singleton_cluster: ImageCluster
@@ -59,7 +60,7 @@ class ClusterManager():
             self.distances[image_id][image_id] = RegistrationResult(1.0, None)
 
     def adjust_image_post_process(self, image):
-        _, image_blur = cv2.threshold(image, thresh=40, maxval=255, type=cv2.THRESH_BINARY)
+        _, image_blur = cv2.threshold(image, thresh=64, maxval=255, type=cv2.THRESH_TOZERO)
         # avg_blur = cv2.medianBlur(avg_blur, 15)
         image_blur = cv2.GaussianBlur(image_blur, (9, 9), 10)
         return image_blur
@@ -130,6 +131,7 @@ class ClusterManager():
         average_image: ImageCluster = list(self.clusters.values())[0]
         average_image_trimmed = self.adjust_image_post_process(average_image.avg_img)
         average_image_trimmed = trim_to_smallest_rectangle(average_image_trimmed)
+        self.avg_image = average_image_trimmed.copy()
         average_image_trimmed = pre_process_images([average_image_trimmed], 1 / 2.0, 0, False)[0]
 
         all_src_images = [sql_img.image for sql_img in self.base_images_sql]
