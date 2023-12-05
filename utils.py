@@ -198,8 +198,7 @@ def get_file_date(file_name: Path):
 
 
 def pre_process_images(images, enlarge_ratio=None, border_size=BORDER_SIZE, invert=True):
-    if len(images[0].shape) == 3: # Concert to Greyscale if not already
-        images = [cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) for img in images]
+    images = convert_images_to_greyscale_if_necessary(images)
     images_enlarged = [cv2.copyMakeBorder(  # Convert to Greyscale and add border
         img,
         border_size, border_size, border_size, border_size,
@@ -212,6 +211,12 @@ def pre_process_images(images, enlarge_ratio=None, border_size=BORDER_SIZE, inve
                                       interpolation=cv2.INTER_CUBIC)
                            for img in images_enlarged]
     return images_enlarged
+
+
+def convert_images_to_greyscale_if_necessary(images):
+    if len(images[0].shape) == 3:  # Concert to Greyscale if not already
+        images = [cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) for img in images]
+    return images
 
 
 def invert_images(images):
