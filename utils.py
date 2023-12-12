@@ -113,7 +113,8 @@ def transform_ecc(template_image: np.ndarray, input_image: np.ndarray) -> (float
         assert cc >= MINIMUM_ACCEPTED_CC, "Correlation too low"
         if warp_mode == cv2.MOTION_HOMOGRAPHY:
             # Use warpPerspective for Homography
-            input_image_aligned = cv2.warpPerspective(input_image, warp_matrix, (template_img_size[1], template_img_size[0]),
+            input_image_aligned = cv2.warpPerspective(input_image, warp_matrix,
+                                                      (template_img_size[1], template_img_size[0]),
                                                       flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
         else:
             # Use warpAffine for Translation, Euclidean and Affine
@@ -197,6 +198,14 @@ def get_file_date(file_name: Path):
         return None
 
 
+def adjust_image_post_process(image):
+    _, image_blur = cv2.threshold(image, thresh=64, maxval=255, type=cv2.THRESH_TOZERO)
+    # _, image_blur = cv2.threshold(image_blur, thresh=64, maxval=255, type=cv2.THRESH_TOZERO)
+    # avg_blur = cv2.medianBlur(avg_blur, 15)
+    image_blur = cv2.GaussianBlur(image_blur, (9, 9), 10)
+    return image_blur
+
+
 def pre_process_images(images, enlarge_ratio=None, border_size=BORDER_SIZE, invert=True):
     images = convert_images_to_greyscale_if_necessary(images)
     images_enlarged = [cv2.copyMakeBorder(  # Convert to Greyscale and add border
@@ -210,6 +219,7 @@ def pre_process_images(images, enlarge_ratio=None, border_size=BORDER_SIZE, inve
         images_enlarged = [cv2.resize(img, None, fx=enlarge_ratio, fy=enlarge_ratio,
                                       interpolation=cv2.INTER_CUBIC)
                            for img in images_enlarged]
+    images_enlarged = [adjust_image_post_process(img) for img in images_enlarged]
     return images_enlarged
 
 
