@@ -12,7 +12,6 @@ orb = cv2.ORB_create(
     scoreType=cv2.ORB_HARRIS_SCORE)
 
 
-
 class FeatureExtraction:
     def __init__(self, img):
         self.img = copy.copy(img)
@@ -23,6 +22,7 @@ class FeatureExtraction:
             self.img, self.kps, 0, \
             flags=cv2.DRAW_MATCHES_FLAGS_DRAW_RICH_KEYPOINTS)
         self.matched_pts = []
+
 
 @dataclass(order=True)
 class AverageImageStat:

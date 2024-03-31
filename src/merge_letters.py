@@ -16,7 +16,7 @@ def get_cc_cache(distance_matrix, row, column):
 
 
 def create_representative_letter(db, letter):
-    images_sql = db.read_images_by_text_orderbyid(letter)
+    images_sql = db.read_images_by_text_orderby_id(letter)
     no_images = len(images_sql)
     print(f'Number of images: {no_images}')
     if no_images == 0:
@@ -49,13 +49,13 @@ def display_letter_results(images_sql, no_images, largest_clusters, image):
     biggest_clusters_images.append(biggest_clusters_images[0])  # Handle the edge case of size 1
     cc, warp_matrix, im_aligned = transform_ecc(biggest_clusters_images[0], biggest_clusters_images[1])
     print(f'cc={cc}')
-    disp(image)
-    disp(tesseract_hebrew_utils.hconcat_resize_max(biggest_clusters_images + [image], interpolation=cv2.INTER_CUBIC))
+    disp(image, 'avg_image')
+    disp(tesseract_hebrew_utils.hconcat_resize_max(biggest_clusters_images + [image], interpolation=cv2.INTER_CUBIC), 'biggest_clusters_images')
     best_cluster: ImageCluster = largest_clusters[list(largest_clusters.keys())[0]]
     non_aligned_images = [image_sql.image for image_sql in images_sql if
                           image_sql.image_id not in best_cluster.source_images]
     non_aligned_images = utils.pre_process_images(non_aligned_images, 1.0)
-    disp(tesseract_hebrew_utils.embed_images_in_square(non_aligned_images, 5))
+    disp(tesseract_hebrew_utils.embed_images_in_square(non_aligned_images, 5), 'Non aligned images')
     # print(distance_matrix)
     # print(distance_matrix.shape)
 

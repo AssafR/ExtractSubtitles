@@ -16,13 +16,12 @@ CORRELATION_THRESHOLD_FOR_MERGE = 0.94
 CORRELATION_THRESHOLD_FOR_DISMISSAL = 0.7
 FRACTION_OF_TOO_FAR_TO_ELIMINATE = 0.5
 
+def disp(img, title=None):
+    view_image_wait_key(img, title)
 
-def disp(img):
-    view_image_wait_key(img)
 
-
-def view_image_wait_key(img):
-    cv2.imshow('img', img)
+def view_image_wait_key(img, title=None):
+    cv2.imshow(title, img)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 

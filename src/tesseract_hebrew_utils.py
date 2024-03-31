@@ -78,7 +78,6 @@ def find_best_average_image(images_enlarged):
     return best_avg
 
 
-
 ##########
 # Source: https://stackoverflow.com/questions/54246492/pytesseract-difference-between-image-to-string-and-image-to-boxes
 # Modification
@@ -134,8 +133,8 @@ def embed_images_in_square(im_list, spacing, text=None):
     h_total = (h_max + spacing) * no_lines + spacing
     w_total = (w_max + spacing) * images_in_line + spacing
 
-    if len(im_list[0].shape)==3:
-        output_img = np.zeros((h_total, w_total,3), dtype=np.uint8)  # Black
+    if len(im_list[0].shape) == 3:
+        output_img = np.zeros((h_total, w_total, 3), dtype=np.uint8)  # Black
         output_img[:, :, :] = 255
     else:
         output_img = np.zeros((h_total, w_total), dtype=np.uint8)  # Black
@@ -148,8 +147,8 @@ def embed_images_in_square(im_list, spacing, text=None):
         insert_image(output_img, image, img_pos_y, img_pos_x)
 
     if text:
-        cv2.putText(output_img, text, (16,16), fontFace=FONT_HERSHEY_PLAIN, fontScale=1.5,
-                    color=(0,255,0), thickness=2)
+        cv2.putText(output_img, text, (16, 16), fontFace=FONT_HERSHEY_PLAIN, fontScale=1.5,
+                    color=(0, 255, 0), thickness=2)
 
     return output_img
 
@@ -161,7 +160,7 @@ def embed_images_in_square(im_list, spacing, text=None):
 #   ("cubic", cv2.INTER_CUBIC),
 #   ("lanczos4", cv2.INTER_LANCZOS4)]
 
-def hconcat_resize_max(im_list, interpolation=cv2.INTER_CUBIC):
+def hconcat_resize_max(im_list, interpolation=cv2.INTER_CUBIC) -> np.ndarray:
     h_max = max(im.shape[0] for im in im_list)  # Resize all to same height for horizontal concatenation
     im_list_resize = [cv2.resize(im, (int(im.shape[1] * h_max / im.shape[0]), h_max), interpolation=interpolation)
                       for im in im_list]
@@ -201,5 +200,3 @@ class SubtitleDataFromFile(object):
             self.h = int(match.group(6))
             self.W = int(match.group(7))
             self.H = int(match.group(8))
-
-

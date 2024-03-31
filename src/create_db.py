@@ -1,6 +1,5 @@
 import glob
 import sys
-import pytesseract
 from tesseract_hebrew_utils import *
 from pathlib import Path
 
@@ -24,9 +23,9 @@ def main():
 
     txt_path = Path(txt_location)
     # args is a list of the command line args
-    jpgfiles = glob.glob(jpeg_location + '/*.jpeg')
-    print(len(jpgfiles))
-    print(jpgfiles)
+    jpg_files = glob.glob(jpeg_location + '/*.jpeg')
+    print(len(jpg_files))
+    print(jpg_files)
 
     pytesseract.pytesseract.tesseract_cmd = TESSERACT_EXE
 
@@ -35,7 +34,7 @@ def main():
     # Save the (currently global) aspect ratio
     aspect = db.insert_aspect_correction(tesseract_sql.AspectCorrection(ASPECT_RATIO_CORRECTION))  # Currently constant
 
-    create_db_from_jpgfiles(aspect, db, jpgfiles, letters_location, txt_path)
+    create_db_from_jpgfiles(aspect, db, jpg_files, letters_location, txt_path)
 
 
 def create_db_from_jpgfiles(aspect, db, jpgfiles, letters_location, txt_path):

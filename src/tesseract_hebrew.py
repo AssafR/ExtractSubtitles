@@ -1,4 +1,3 @@
-from pytesseract import Output, run_and_get_output
 import tesseract_sql
 from tesseract_hebrew_utils import *
 
@@ -27,7 +26,7 @@ def main_old():
 def main():
 
     db = tesseract_sql.DatabaseManager(sqlite_db)
-    images = db.read_images_by_text_orderbyid('ל')
+    images = db.read_images_by_text_orderby_id('ל')
 
     # for img in images:
     #     cv2.rectangle(img.image, (0, 0), (img.image.shape[1], img.image.shape[0]), (0, 255, 0), 3)

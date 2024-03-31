@@ -4,24 +4,15 @@ import sqlite3
 import numpy as np
 import io
 import hashlib
-from dataclasses import dataclass, field
-from contextlib import closing
-
-import tesseract_hebrew_utils
-from typing import Optional
-
 import utils
-
-
-# Define a function to create a database connection
-def create_connection(database):
-    return sqlite3.connect(database,
-                           detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES  # For parsing datetypes
-                           )
+from dataclasses import dataclass
+from contextlib import closing
+from typing import Optional
 
 
 @dataclass
 class AspectCorrection:
+    """A class to represent an aspect ratio correction in the database."""
     aspect_correction_id: int
     aspect: float
 
@@ -36,6 +27,8 @@ class AspectCorrection:
 
 @dataclass
 class Image:
+    """A class to represent an image in the database."""
+
     image_id: int
     image_text: str
     image: np.ndarray  # Assuming the image is a numpy.ndarray
@@ -70,6 +63,7 @@ class Image:
 
 @dataclass
 class SubsDecoded:
+    """A class to represent a decoded subtitle in the database."""
     subs_decoded_id: Optional[int]
     sub_file_fk: int
     image_id_fk: int
@@ -88,14 +82,15 @@ class SubsDecoded:
 
 @dataclass
 class SubsFiles:
-    sub_file_id: int
+    """A class to represent a subtitle file in the database."""
+    sub_file_id: Optional[int]
     file_name: str
     directory_name: str
     file_date: datetime.datetime
 
     def __init__(self, full_file_name):
         self.sub_file_id = None
-        self.file_name, self.directory_name, self.file_date = get_file_attributes(full_file_name)
+        self.file_name, self.directory_name, self.file_date = utils.get_file_attributes(full_file_name)
 
     @classmethod
     def from_sql_query(cls, query_result):
@@ -105,9 +100,18 @@ class SubsFiles:
         return pathlib.Path(self.directory_name).joinpath(self.file_name).as_posix()
 
 
-# Define a class to manage the database
+def create_connection(database):
+    """ Create a database connection to a SQLite database."""
+    return sqlite3.connect(database,
+                           detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES  # For parsing datetypes
+                           )
+
+
 class DatabaseManager:
+    """A class to manage the SQLite database."""
+
     def __init__(self, database):
+        """ Create a connection to the database."""
         self.conn = create_connection(database)
         # Converts np.array to TEXT when inserting
         sqlite3.register_adapter(np.ndarray, adapt_array)
@@ -116,19 +120,22 @@ class DatabaseManager:
         # sqlite3.register_converter("array", convert_array)
         sqlite3.register_converter("array", lambda x: np.load(io.BytesIO(x)))
 
-    def read_aspect_corrections(self):
+    def read_aspect_corrections(self) -> list[AspectCorrection]:
+        """ Read all aspect corrections from the database."""
         with closing(self.conn.cursor()) as cursor:
             cursor.execute("SELECT * FROM aspect_corrections")
             results = cursor.fetchall()
         return [AspectCorrection.from_sql_query(row) for row in results]
 
-    def read_images(self):
+    def read_images(self) -> list[Image]:
+        """ Read all images from the database."""
         with closing(self.conn.cursor()) as cursor:
             cursor.execute("SELECT * FROM images")
             results = cursor.fetchall()
         return [Image.from_sql_query(row) for row in results]
 
-    def read_images_by_text_orderbyid(self, text, from_subtitles=True):
+    def read_images_by_text_orderby_id(self, text, from_subtitles=True) -> list[Image]:
+        # TODO: Document what subs_condition/from_subtitles does
         if from_subtitles:
             subs_condition = 'decoding_fk IS NULL'
         else:
@@ -140,24 +147,27 @@ class DatabaseManager:
             results = cursor.fetchall()
         return [Image.from_sql_query(row) for row in results]
 
-    def read_subs_decoded(self):
+    def read_subs_decoded(self) -> list[SubsDecoded]:
+        """ Read all decoded subtitles from the database."""
         with closing(self.conn.cursor()) as cursor:
             cursor.execute("SELECT * FROM subs_decoded")
             results = cursor.fetchall()
         return [SubsDecoded.from_sql_query(row) for row in results]
 
-    def read_subs_files(self):
+    def read_subs_files(self) -> list[SubsFiles]:
+        """ Read all subtitle files from the database."""
         with closing(self.conn.cursor()) as cursor:
             cursor = self.conn.cursor()
             cursor.execute("SELECT * FROM subs_files")
             results = cursor.fetchall()
         return [SubsFiles.from_sql_query(row) for row in results]
 
-    def insert_aspect_correction(self, aspect_correction):
+    def insert_aspect_correction(self, aspect_correction) -> Optional[AspectCorrection]:
+        """ Insert an aspect correction into the database."""
         with closing(self.conn.cursor()) as cursor:
             cursor.execute("INSERT OR IGNORE INTO aspect_corrections (aspect) VALUES (?)", (aspect_correction.aspect,))
             self.conn.commit()
-            cursor.execute("SELECT aspect_correction_id FROM aspect_corrections WHERE aspect = ?",
+            cursor.execute('SELECT aspect_correction_id FROM aspect_corrections WHERE aspect = ?',
                            (aspect_correction.aspect,))
             result = cursor.fetchone()
         if result:
@@ -165,7 +175,7 @@ class DatabaseManager:
             return aspect_correction
         return None
 
-    def insert_image(self, image):
+    def insert_image(self, image) -> Optional[Image]:
         with closing(self.conn.cursor()) as cursor:
             # Construct a raw SQL statement for INSERT OR IGNORE and SELECT
             insert_sql = """
@@ -189,7 +199,7 @@ class DatabaseManager:
         # If no existing row found, close the cursor and return None
         return None
 
-    def insert_subs_decoded(self, subs_decoded):
+    def insert_subs_decoded(self, subs_decoded: SubsDecoded) -> SubsDecoded:
         with closing(self.conn.cursor()) as cursor:
             cursor.execute(
                 "INSERT INTO subs_decoded (sub_file_fk, image_id_fk, detected_char, char_index_in_text, [left], [right], top, bottom, page) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
@@ -201,7 +211,7 @@ class DatabaseManager:
         subs_decoded.subs_decoded_id = inserted_id
         return subs_decoded
 
-    def insert_subs_files(self, subs_files):
+    def insert_subs_files(self, subs_files: SubsFiles) -> Optional[SubsFiles]:
         with closing(self.conn.cursor()) as cursor:
             cursor.execute("INSERT OR IGNORE INTO subs_files (file_name, directory_name, file_date) VALUES (?, ?, ?)",
                            (subs_files.file_name, subs_files.directory_name, subs_files.file_date))
@@ -218,7 +228,9 @@ class DatabaseManager:
 
 def adapt_array(arr):
     """
-    http://stackoverflow.com/a/31312102/190597 (SoulNibbler)
+    SQLite does not have a storage type for arrays. This function converts a numpy array to a string of bytes.
+    Converts np.array to TEXT when inserting
+    Source: https://stackoverflow.com/a/31312102/190597 (SoulNibbler)
     """
     out = io.BytesIO()
     np.save(out, arr)
@@ -227,13 +239,19 @@ def adapt_array(arr):
 
 
 def convert_array(text):
+    """
+    SQLite does not have a storage type for arrays. This function converts a string of bytes to a numpy array.
+    Converts TEXT to np.array when selecting
+    Source: https://stackoverflow.com/a/31312102/190597 (SoulNibbler)
+    """
     out = io.BytesIO(text)
     out.seek(0)
     return np.load(out)
 
 
-def read_images_for_letter(db, letter, from_subtitles=True):
-    images_sql = db.read_images_by_text_orderbyid(letter, from_subtitles)
+def read_images_for_letter(db, letter, from_subtitles=True) -> list[np.ndarray]:
+    """ Read images for a given letter from the database and apply pre_process to them """
+    images_sql = db.read_images_by_text_orderby_id(letter, from_subtitles)
     # images_sql = sorted(images_sql, key=lambda x: x.image_id, reverse=False)
     images_raw = [img.image for img in images_sql]
     images = utils.pre_process_images(images_raw, 3.0)

@@ -1,7 +1,7 @@
 from pathlib import Path
 
-from utils import transform_ecc
-from tesseract_sql import read_images_for_letter
+from src.utils import transform_ecc
+from src.tesseract_sql import read_images_for_letter
 import numpy as np
 
 def read_create_distance_matrix(db, letter):

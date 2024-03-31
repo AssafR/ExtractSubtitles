@@ -46,10 +46,10 @@ class ClusterManager():
         self.next_processing_queue = collections.deque(maxlen=self.no_images + 1)
         self.processing_queue.extendleft(self.clusters.keys())  # Init the processing queue with all images
         self.avg_image = None
-        self.images_registered = Dict[int,Image]
+        self.images_registered = Dict[int, Image]
 
     def init_clusters_and_distances(self, images_sql: Dict[int, Image]):
-        # Distances is a (sorted) dictionary of dictionaries, with distances[i][j] is the distance between i and j
+        # Distances is a (sorted) dictionary of dictionaries, with distances[i][j] is the distance between j and i
         # Should be symmetrical, i.e. distances[i][j] == distances[j][i]
         # Initialize
         for image_id, img_sql in images_sql.items():
@@ -62,7 +62,6 @@ class ClusterManager():
             self.distances[image_id] = SortedDict()
             self.distances[image_id][image_id] = RegistrationResult(1.0, None)
 
-
     def cluster_letters(self):
         # At the beginning of the loop, processing_queue contains all the clusters
         current = self.processing_queue.pop()  # Initialize with first image from queue
@@ -71,8 +70,8 @@ class ClusterManager():
             next_cluster = self.processing_queue.pop()
             if self.clusters[next_cluster] is None or self.should_eliminate_cluster(next_cluster, self.no_images):
                 print(f'Eliminating {next_cluster}')
-                self.clusters[
-                    next_cluster] = None  # The cluster is popped and not re-inserted, so will not be queried again
+                # The cluster is popped and not re-inserted, so will not be queried again
+                self.clusters[next_cluster] = None
                 continue
 
             if self.clusters[current] is None or self.should_eliminate_cluster(current, self.no_images):
@@ -137,7 +136,7 @@ class ClusterManager():
         all_src_images = convert_images_to_greyscale_if_necessary(all_src_images)
         all_src_images = [adjust_image_post_process(img) for img in all_src_images]
 
-        source_images_square = tesseract_hebrew_utils.embed_images_in_square(all_src_images, 5,'Source Images')
+        source_images_square = tesseract_hebrew_utils.embed_images_in_square(all_src_images, 5, 'Source Images')
         all_images_on_registered = [RegistrationResult(src_img, average_image_trimmed) for src_img in
                                     invert_images(all_src_images)]
         all_images_on_representative = invert_images(

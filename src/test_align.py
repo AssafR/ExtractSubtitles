@@ -1,14 +1,8 @@
 import tesseract_hebrew_utils
 import tesseract_sql
 import cv2
-from matplotlib import pyplot as plt
-from PIL import Image
-import numpy as np
-import copy
 
 import utils
-from alignment import FeatureExtraction, feature_matching, AverageImageStat, calc_average_similar_base
-from utils import transform_ecc
 
 sqlite_db = r'.\letters.sqlite'
 
@@ -27,7 +21,7 @@ def disp(img):
 
 def main():
     db = tesseract_sql.DatabaseManager(sqlite_db)
-    images_sql_unsorted = db.read_images_by_text_orderbyid('כ')
+    images_sql_unsorted = db.read_images_by_text_orderby_id('כ')
     images_sql = sorted(images_sql_unsorted, key=lambda x: x.image_id, reverse=False)
     images = [img.image for img in images_sql]
 
