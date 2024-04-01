@@ -3,14 +3,14 @@ import collections
 import cv2
 import numpy as np
 from sortedcontainers import SortedDict
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 import tesseract_hebrew_utils
 from tesseract_sql import Image
 from utils import ImageCluster, pre_process_images, append_left_if_doesnt_exist, CORRELATION_THRESHOLD_FOR_MERGE, \
-    images_too_different_in_size, transform_ecc, CORRELATION_THRESHOLD_FOR_DISMISSAL, FRACTION_OF_TOO_FAR_TO_ELIMINATE, \
-    disp, trim_to_smallest_rectangle, invert_images, BORDER_SIZE, convert_images_to_greyscale_if_necessary, \
-    adjust_image_post_process
+    images_too_different_in_size, transform_ecc, CORRELATION_THRESHOLD_FOR_DISMISSAL, \
+    FRACTION_OF_TOO_FAR_TO_ELIMINATE, disp, trim_to_smallest_rectangle, invert_images, BORDER_SIZE, \
+    convert_images_to_greyscale_if_necessary, adjust_image_post_process
 
 
 class RegistrationResult(object):
@@ -33,13 +33,14 @@ class RegistrationResult(object):
         self.warped = warped
 
 
-class ClusterManager():
+class ClusterManager(object):
     def __init__(self, images_sql: List[Image]):
         # Note: Original images are black-on-white RGB images
         self.base_images_sql: Dict[int, Image] = {image_sql.image_id: image_sql for image_sql in images_sql}
         self.no_images = len(self.base_images_sql.keys())
-        self.clusters: Dict[
-            int, ImageCluster] = SortedDict()  # Dictionary of clusters, with key=representative_id, value=ImageCluster
+        # Dictionary of clusters, with key=representative_id, value=ImageCluster
+        self.clusters: Optional[Dict[int, Optional[ImageCluster]]] = SortedDict()
+
         self.distances: Dict[int, Dict[int, RegistrationResult]] = SortedDict()
         self.init_clusters_and_distances(self.base_images_sql)
         self.processing_queue = collections.deque(maxlen=self.no_images + 1)
@@ -143,7 +144,8 @@ class ClusterManager():
             [reg.warped for reg in all_images_on_registered if reg.warp_matrix is not None])
         registered_images_square = tesseract_hebrew_utils.embed_images_in_square(all_images_on_representative, 5,
                                                                                  'Registered Images')
-        # all_images_diff = [np.abs(reg - average_image_trimmed) for reg in all_images_on_representative if reg is not None]
+        # all_images_diff = [np.abs(reg - average_image_trimmed)
+        #   for reg in all_images_on_representative if reg is not None]
         disp(cv2.hconcat(
             [source_images_square, registered_images_square, abs(source_images_square - registered_images_square)]))
         # disp(tesseract_hebrew_utils.embed_images_in_square(all_images_diff, 5))
