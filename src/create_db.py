@@ -1,5 +1,6 @@
 import glob
 import sys
+from typing import Optional
 
 from src.utils import read_image_from_file_and_fix_aspect_ratio
 from tesseract_hebrew_utils import *
@@ -16,7 +17,7 @@ TESSERACT_CUSTOM_CONFIG_STR = r'--oem 3 --psm 6 -l heb'
 def main():
     """ Usage: python create_db.py <jpeg_location> <txt_location> <letters_location> <action>
         action = {create}
-        Example: ".\OCR_Samples" "C:\SourceCode\Projects\videosubfinder-src\Build\Debug_x64\TXTImages" ".\OCR_Letters"
+        Example: .\\OCR_Samples C:\\SourceCode\\Projects\\videosubfinder-src\\Build\\Debug_x64\\TXTImages .\\OCR_Letters
     """
     print('|'.join(sys.argv))
     jpeg_location = sys.argv[1]
@@ -57,17 +58,18 @@ def perform_ocr_using_api_on_file_and_insert_into_db(db: tesseract_sql.DatabaseM
     # Currently unused. Note pBaseName should be parsed too, e.g: '0_40_23_280__0_40_27_479'
     # subtitle_data = SubtitleDataFromFile(Path(jpgfile).stem)
     # print(subtitle_data)
-    char_boxes = {}
+    # char_boxes = {}
 
     # Save the filename to database
-    sub_file = db.insert_subs_files(tesseract_sql.SubsFiles(jpgfile))
+    sub_file: Optional[tesseract_sql.SubsFiles] = db.insert_subs_files(tesseract_sql.SubsFiles(jpgfile))
 
-    full_img_from_file_resized, hImg, wImg = read_image_from_file_and_fix_aspect_ratio(
-        sub_file.sub_file.full_file_name(),
-        aspect.aspect)
+    full_img_from_file_resized, hImg, wImg = \
+        read_image_from_file_and_fix_aspect_ratio(
+            sub_file.full_file_name(),
+            aspect.aspect)
     print(wImg, hImg)
 
-    ratio = 1024.0 / wImg;
+    # ratio = 1024.0 / wImg
 
     # img = cv2.resize(img, (int(ratio * wImg), int(ratio * hImg)))
 
@@ -167,17 +169,19 @@ def perform_ocr_using_api_on_file_and_insert_into_db(db: tesseract_sql.DatabaseM
 
         # if detected_word:
         #     word_rect_img = img[top - 2:top + height + 4, left - 2:left + width + 4]
-        #     # char_boxes = pytesseract.image_to_boxes(word_rect_img, lang="heb",
-        #     #                                         output_type=pytesseract.Output.DICT)  # .splitlines() #, output_type=pytesseract.Output.DICT
+        #     # char_boxes = pytesseract.image_to_boxes(
+        #     #                 word_rect_img, lang="heb",
+        #     #                 output_type=pytesseract.Output.DICT)# .splitlines()#,output_type=pytesseract.Output.DICT
         #     char_boxes = new_image_to_boxes(word_rect_img, lang="heb",
-        #                                     output_type=pytesseract.Output.STRING)  # .splitlines() #, output_type=pytesseract.Output.DICT
+        #                                     output_type=pytesseract.Output.STRING)
         #
         #     # cv2.imshow('img', word_rect_img)
         #     # cv2.waitKey(0)
         #     for index_char in range(len(char_boxes['left'])):
         #         detected_char, left, top, right, bottom = \
-        #             string_boxes_list['char'][index], string_boxes_list['left'][index], string_boxes_list['top'][index], \
-        #                 string_boxes_list['right'][index], string_boxes_list['bottom'][index]
+        #             string_boxes_list['char'][index], string_boxes_list['left'][index],
+        #             string_boxes_list['top'][index], \
+        #             string_boxes_list['right'][index], string_boxes_list['bottom'][index]
         #         # cv2.putText(img, str(detected_word), (left, top + 13), cv2.QT_FONT_BLACK, 0.4, (50, 205, 50), 1)
         #         cv2.rectangle(img, (left, top), (right, bottom), (50, 0, 50), 2)
 
