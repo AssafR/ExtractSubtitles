@@ -2,3 +2,6 @@
 /resources/letters.sqlite
 /letters.sqlite.old
 /resources/letters - Copy.sqlite
+/letters.sqlite
+/Pipfile.lock
+/.venv/

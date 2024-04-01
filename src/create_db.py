@@ -1,18 +1,23 @@
 import glob
 import sys
+
+from src.utils import read_image_from_file_and_fix_aspect_ratio
 from tesseract_hebrew_utils import *
 from pathlib import Path
-
 import tesseract_sql
 
 BOX_ENLARGE_FACTOR = 1.2
 
-sqlite_db = r'.\letters2.sqlite'
+sqlite_db = r'resources\letters3.sqlite'
 ASPECT_RATIO_CORRECTION = 2.0
 TESSERACT_CUSTOM_CONFIG_STR = r'--oem 3 --psm 6 -l heb'
 
 
 def main():
+    """ Usage: python create_db.py <jpeg_location> <txt_location> <letters_location> <action>
+        action = {create}
+        Example: ".\OCR_Samples" "C:\SourceCode\Projects\videosubfinder-src\Build\Debug_x64\TXTImages" ".\OCR_Letters"
+    """
     print('|'.join(sys.argv))
     jpeg_location = sys.argv[1]
     txt_location = sys.argv[2]
@@ -24,50 +29,50 @@ def main():
     txt_path = Path(txt_location)
     # args is a list of the command line args
     jpg_files = glob.glob(jpeg_location + '/*.jpeg')
-    print(len(jpg_files))
+    print(f'Found {len(jpg_files)} jpeg files:')
     print(jpg_files)
 
     pytesseract.pytesseract.tesseract_cmd = TESSERACT_EXE
 
     db = tesseract_sql.DatabaseManager(sqlite_db)
 
-    # Save the (currently global) aspect ratio
+    # Save the (currently global) aspect ratio to the db
     aspect = db.insert_aspect_correction(tesseract_sql.AspectCorrection(ASPECT_RATIO_CORRECTION))  # Currently constant
 
-    create_db_from_jpgfiles(aspect, db, jpg_files, letters_location, txt_path)
+    perform_ocr_on_jpgfiles_and_insert_into_db(aspect, db, jpg_files, letters_location, txt_path)
 
 
-def create_db_from_jpgfiles(aspect, db, jpgfiles, letters_location, txt_path):
+def perform_ocr_on_jpgfiles_and_insert_into_db(aspect, db, jpgfiles, letters_location, txt_path):
     for jpgfile in jpgfiles:
         filename = Path(jpgfile).stem
         txt_filename = txt_path.joinpath(filename)
         # perform_ocr_commandline(jpgfile, txt_filename)
-        perform_ocr_api_save_to_db(db, aspect, jpgfile, txt_filename, letters_location)
+        perform_ocr_using_api_on_file_and_insert_into_db(db, aspect, jpgfile, txt_filename, letters_location)
 
 
-def perform_ocr_api_save_to_db(db: tesseract_sql.DatabaseManager,
-                               aspect: tesseract_sql.AspectCorrection,
-                               jpgfile: str, txt_filename, letters_location):
+def perform_ocr_using_api_on_file_and_insert_into_db(db: tesseract_sql.DatabaseManager,
+                                                     aspect: tesseract_sql.AspectCorrection,
+                                                     jpgfile: str,
+                                                     txt_filename, letters_location):
     # Currently unused. Note pBaseName should be parsed too, e.g: '0_40_23_280__0_40_27_479'
     # subtitle_data = SubtitleDataFromFile(Path(jpgfile).stem)
     # print(subtitle_data)
-
-    sub_file = db.insert_subs_files(tesseract_sql.SubsFiles(jpgfile))  # Save the filename to database
-
-    full_img = cv2.imread(sub_file.full_file_name())
-
     char_boxes = {}
 
-    hImg, wImg, _ = full_img.shape
-    full_img = cv2.resize(full_img, (int(aspect.aspect * wImg), int(hImg)))
-    hImg, wImg, _ = full_img.shape
+    # Save the filename to database
+    sub_file = db.insert_subs_files(tesseract_sql.SubsFiles(jpgfile))
+
+    full_img_from_file_resized, hImg, wImg = read_image_from_file_and_fix_aspect_ratio(
+        sub_file.sub_file.full_file_name(),
+        aspect.aspect)
+    print(wImg, hImg)
 
     ratio = 1024.0 / wImg;
 
     # img = cv2.resize(img, (int(ratio * wImg), int(ratio * hImg)))
 
     # Adding custom options
-    detected_text = pytesseract.image_to_string(full_img, config=TESSERACT_CUSTOM_CONFIG_STR)
+    detected_text = pytesseract.image_to_string(full_img_from_file_resized, config=TESSERACT_CUSTOM_CONFIG_STR)
     # d = pytesseract.image_to_data(img, output_type=pytesseract.Output.DICT)
     # n_boxes = len(d['level'])
     # for i in range(n_boxes):
@@ -77,27 +82,50 @@ def perform_ocr_api_save_to_db(db: tesseract_sql.DatabaseManager,
     print(detected_text)
     print('----------')
 
-    string_boxes = pytesseract.image_to_boxes(full_img, lang="heb",
-                                              output_type=pytesseract.Output.STRING).splitlines()  # , output_type=pytesseract.Output.DICT
-    # string_boxes = pytesseract.image_to_data(img, lang="heb",
-    #                                          output_type=pytesseract.Output.DICT)  # .splitlines() #, output_type=pytesseract.Output.DICT
-    ocr_box_results = [OcrBoxResult(full_img, row, index) for index, row in enumerate(string_boxes)]
+    # run tesseract OCR, returning the bounding boxes for each character as a
+    # row in a string
+    # The boxes are returned in the following format:
+    #  <symbol> <left> <bottom> <right> <top> <page>
+    # e.g:
+    # D 131 1530 150 1551 0
+    # o 153 1529 169 1546 0
+    # c 172 1529 185 1546 0
+    # u 190 1529 204 1545 0
+    # m 209 1530 233 1546 0
+    # e 214 1529 250 1551 0
+    # n 237 1529 253 1546 0
+    # t 257 1530 285 1550 0
+
+    # Split the lines into a list:
+    string_boxes_list = pytesseract.image_to_boxes(image=full_img_from_file_resized,
+                                                   lang="heb",
+                                                   output_type=pytesseract.Output.STRING).splitlines()
+    # , output_type=pytesseract.Output.DICT
+    # string_boxes_list = pytesseract.image_to_data(
+    #   img, lang="heb",output_type=pytesseract.Output.DICT)  # .splitlines() #, output_type=pytesseract.Output.DICT
+    # Convert the list into a list of OcrBoxResult objects
+    ocr_box_results = [OcrBoxResult(full_img_from_file_resized, row, index)
+                       for index, row in enumerate(string_boxes_list)]
     for ocr_box_result in ocr_box_results:
         # detected_box_file_name = new_char_filename(jpgfile, letters_location, row)
         # detected_char, left, top, right, bottom = \
-        #     string_boxes['char'][index],string_boxes['left'][index],string_boxes['top'][index],string_boxes['right'][index],string_boxes['bottom'][index]
+        #     string_boxes_list['char'][index],string_boxes_list['left'][index],string_boxes_list['top'][index],string_boxes_list['right'][index],string_boxes_list['bottom'][index]
         # detected_word, left, top, width, height = \
-        #     string_boxes['text'][index], string_boxes['left'][index], string_boxes['top'][index], string_boxes['width'][
-        #         index], string_boxes['height'][index]
+        #     string_boxes_list['text'][index], string_boxes_list['left'][index],
+        #     string_boxes_list['top'][index], string_boxes_list['width'][
+        #         index], string_boxes_list['height'][index]
         # (x1,y1), (x2,y2)
         # cv2.rectangle(img, (x, hImg - y), (w, hImg - h), (255, 0, 0), 2)
         # print(b[1:])  # Row of numbers
 
-        print(f"\n** {ocr_box_result.detected_char} **")
+        print(f"\n** Char: [{ocr_box_result.detected_char}] **")
 
-        tmp_img = full_img.copy()
+        tmp_img = full_img_from_file_resized.copy()
 
-        char_box, char_box_enlarged = ocr_box_result.extract_box_from_image(enlarge_factor=BOX_ENLARGE_FACTOR)
+        char_box, char_box_enlarged = (ocr_box_result.extract_box_from_image_with_enlargement_factor
+                                       (enlarge_factor=BOX_ENLARGE_FACTOR))
+
+        # Store image in database-ready format
         img_data = tesseract_sql.Image(id=None, text=ocr_box_result.detected_char, img=char_box, image_hash=None,
                                        decoding_fk=None)
         # Store image in dataclass
@@ -148,8 +176,8 @@ def perform_ocr_api_save_to_db(db: tesseract_sql.DatabaseManager,
         #     # cv2.waitKey(0)
         #     for index_char in range(len(char_boxes['left'])):
         #         detected_char, left, top, right, bottom = \
-        #             string_boxes['char'][index], string_boxes['left'][index], string_boxes['top'][index], \
-        #                 string_boxes['right'][index], string_boxes['bottom'][index]
+        #             string_boxes_list['char'][index], string_boxes_list['left'][index], string_boxes_list['top'][index], \
+        #                 string_boxes_list['right'][index], string_boxes_list['bottom'][index]
         #         # cv2.putText(img, str(detected_word), (left, top + 13), cv2.QT_FONT_BLACK, 0.4, (50, 205, 50), 1)
         #         cv2.rectangle(img, (left, top), (right, bottom), (50, 0, 50), 2)
 
@@ -167,7 +195,7 @@ def perform_ocr_api_save_to_db(db: tesseract_sql.DatabaseManager,
     #     # cv2.waitKey(0)
     #     # cv2.destroyAllWindows()
     #
-    # img_resized = cv2.resize(full_img, (int(ratio * wImg), int(ratio * hImg)))
+    # img_resized = cv2.resize(full_img_from_file, (int(ratio * wImg), int(ratio * hImg)))
     # cv2.imshow('img', img_resized)
     # cv2.waitKey(1000)
     # cv2.destroyAllWindows()

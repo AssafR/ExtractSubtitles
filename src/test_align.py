@@ -4,7 +4,7 @@ import cv2
 
 import utils
 
-sqlite_db = r'.\letters.sqlite'
+sqlite_db = r'resources\letters.sqlite'
 
 
 # view_image_wait_key(all_images)

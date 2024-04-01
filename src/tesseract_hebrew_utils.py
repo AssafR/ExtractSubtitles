@@ -1,35 +1,44 @@
 import re
+from typing import Any
+from typing_extensions import deprecated
+
 import pytesseract
 import math
 import numpy as np
 from pathlib import Path
-
-from cv2 import FONT_HERSHEY_PLAIN
+import cv2
+# from cv2 import FONT_HERSHEY_PLAIN
 from pytesseract import Output, run_and_get_output
 from subprocess import check_output
-
-import cv2
-
 from alignment import calc_average_similar_base
 
 TESSERACT_EXE = r'C:\Program Files\Tesseract-OCR\tesseract.exe'
 
 
 class OcrBoxResult:
+    """ Store the OCR box result and the image it was extracted from """
 
-    def __init__(self, img, results_text_row, char_index):
+    def __init__(self, img: Any, char_results_row: str, char_index_inside_row: int):
+        """ Initialize the OCR box result with the image and the OCR box data
+            The boxes are returned in the following format:
+             <symbol> <left> <bottom> <right> <top> <page>
+            e.g:
+            D 131 1530 150 1551 0
+            Parse the string and store the data
+            Calculate the bottom and top in the image coordinates
+        """
         self.img = img
         self.hImg, self.wImg, _ = self.img.shape
-        self.char_index_in_text = char_index
+        self.char_index_in_text = char_index_inside_row
 
-        ocr_box_data = results_text_row.split()
+        ocr_box_data = char_results_row.split()
         self.detected_char, self.page = ocr_box_data[0], int(ocr_box_data[5])
         self.left, self.top, self.right, self.bottom = \
             int(ocr_box_data[1]), int(ocr_box_data[2]), int(ocr_box_data[3]), int(ocr_box_data[4])
         self.calc_img_bottom = self.hImg - self.bottom
         self.calc_img_top = self.hImg - self.top
 
-    def extract_box_from_image(self, enlarge_factor=1.0):
+    def extract_box_from_image_with_enlargement_factor(self, enlarge_factor: float = 1.0):
         width = (self.right - self.left)
         height = (self.bottom - self.top)
         center_x = (self.left + self.right) / 2
@@ -52,6 +61,7 @@ class OcrBoxResult:
         return char_box_original, char_box_enlarged
 
 
+@deprecated
 def new_char_filename(original_filename, letters_location, description_row):
     path = Path(original_filename)
     b = description_row.split()
@@ -63,8 +73,11 @@ def new_char_filename(original_filename, letters_location, description_row):
     return new_filename_full.as_posix()
 
 
+@deprecated
 def find_best_average_image(images_enlarged):
-    # Find by going over all n^2 possibilities
+    """ Find the best average image from a list of images
+        Find by going over all n^2 possibilities
+    """
     avg_images_all_bases = []
     for base_image_no in range(0, len(images_enlarged)):
         print(f'Comparing to image #{base_image_no}')
@@ -186,8 +199,8 @@ def resize_images_in_square(im_list, interpolation=cv2.INTER_CUBIC):
         images_lines.append(cv2.hconcat(line_images))
 
 
-class SubtitleDataFromFile(object):
-    def __init__(self, filename):
+class TXTImagesSubtitleDataExtractedFromFileName(object):
+    def __init__(self, filename: str):
         regex_pattern = r"^(.+)_([0-9]{1})([0-9]{4})([0-9]{4})([0-9]{4})([0-9]{4})([0-9]{4})([0-9]{4})$"
         match = re.match(regex_pattern, filename)
 

@@ -3,11 +3,12 @@ from tesseract_hebrew_utils import *
 
 # INSERT OR IGNORE INTO aspect_corrections(aspect) VALUES(4.0);
 
-sqlite_db = r'.\letters.sqlite'
+sqlite_db = r'resources\letters.sqlite'
 
 COLOR_GREEN = (0, 255, 0)
 
 
+@deprecated
 def new_image_to_boxes(image, lang, output_type, config=None):  # .splitlines() #, output_type=pytesseract.Output.DICT
     return image_to_boxes_keep_same(image, lang, output_type)
 
@@ -24,7 +25,6 @@ def main_old():
 
 
 def main():
-
     db = tesseract_sql.DatabaseManager(sqlite_db)
     images = db.read_images_by_text_orderby_id('ל')
 
@@ -42,8 +42,6 @@ def main():
     # cv2.imshow('img', all_images)
     # cv2.waitKey(0)
     # cv2.destroyAllWindows()
-
-
 
 
 if __name__ == '__main__':

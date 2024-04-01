@@ -5,7 +5,7 @@ import utils
 from utils import (ImageCluster, disp, transform_ecc)
 from cluster import ClusterManager
 
-sqlite_db = r'.\letters2.sqlite'
+sqlite_db = r'resources\letters2.sqlite'
 
 LETTER = 'ל'
 

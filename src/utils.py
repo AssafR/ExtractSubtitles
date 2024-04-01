@@ -3,8 +3,10 @@ import datetime
 import os
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Tuple
 
 import cv2
+import numpy
 import numpy as np
 
 ACCEPTABLE_EXTRA_DIFFERENCE_IN_DIMENSIONS = 0.3  # 30%
@@ -245,3 +247,13 @@ def reverse_pre_process_images(images, enlarge_ratio=None):
                                       interpolation=cv2.INTER_CUBIC)
                            for img in images_enlarged]
     return images_enlarged
+
+
+def read_image_from_file_and_fix_aspect_ratio(sub_filename: str, aspect_ratio: float) -> Tuple[np.ndarray, float, float]:
+    img_original = cv2.imread(sub_filename)
+    hImg, wImg, _ = img_original.shape
+
+    # Resize the image according to the aspect ratio correction.
+    img_from_file_resized = cv2.resize(img_original, (int(aspect_ratio * wImg), int(hImg)))
+    hImg, wImg, _ = img_from_file_resized.shape
+    return img_from_file_resized, hImg, wImg
