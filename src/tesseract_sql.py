@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from contextlib import closing
 from typing import Optional
 
+SQL_CREATION_SCRIPT = r'..\resources\letters.sql'
 
 @dataclass
 class AspectCorrection:
@@ -100,9 +101,10 @@ class SubsFiles:
         return pathlib.Path(self.directory_name).joinpath(self.file_name).as_posix()
 
 
-def create_connection(database):
+def create_connection(db_file_name):
     """ Create a database connection to a SQLite database."""
-    return sqlite3.connect(database,
+    db_file_abs_path = pathlib.Path(db_file_name).absolute()
+    return sqlite3.connect(db_file_abs_path,
                            detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES  # For parsing datetypes
                            )
 
@@ -113,12 +115,30 @@ class DatabaseManager:
     def __init__(self, database):
         """ Create a connection to the database."""
         self.conn = create_connection(database)
+
+        # Execute the SQL query creating the database tables if they don't exist
+        with open(SQL_CREATION_SCRIPT, 'r') as file:
+            sql_query = file.read()
+            self.conn.executescript(sql_query)
+
         # Converts np.array to TEXT when inserting
         sqlite3.register_adapter(np.ndarray, adapt_array)
 
         # Converts TEXT to np.array when selecting
         # sqlite3.register_converter("array", convert_array)
         sqlite3.register_converter("array", lambda x: np.load(io.BytesIO(x)))
+
+    def create_tables(self, conn, create_table_sql):
+        """ create a table from the create_table_sql statement
+        :param conn: Connection object
+        :param create_table_sql: a CREATE TABLE statement
+        :return:
+        """
+        try:
+            c = conn.cursor()
+            c.execute(create_table_sql)
+        except sqlite3.Error as e:
+            print(e)
 
     def read_aspect_corrections(self) -> list[AspectCorrection]:
         """ Read all aspect corrections from the database."""

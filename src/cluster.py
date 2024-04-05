@@ -185,7 +185,7 @@ class ClusterManager(object):
                 distances[cluster_no].pop(cluster2.representative_id, 0.0)
                 distances[cluster_no][cluster1.representative_id] = warp_result
             else:
-                # print(f'No distance for cluster {cluster_no}')
+                #  print(f'No distance for cluster {cluster_no}')
                 pass
         # Now there's a new combined dictionary with the best correlation of the two groups
 

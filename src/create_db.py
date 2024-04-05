@@ -9,7 +9,7 @@ import tesseract_sql
 
 BOX_ENLARGE_FACTOR = 1.2
 
-sqlite_db = r'resources\letters3.sqlite'
+sqlite_db = r'..\resources\letters4.sqlite'
 ASPECT_RATIO_CORRECTION = 2.0
 TESSERACT_CUSTOM_CONFIG_STR = r'--oem 3 --psm 6 -l heb'
 
@@ -18,6 +18,10 @@ def main():
     """ Usage: python create_db.py <jpeg_location> <txt_location> <letters_location> <action>
         action = {create}
         Example: .\\OCR_Samples C:\\SourceCode\\Projects\\videosubfinder-src\\Build\\Debug_x64\\TXTImages .\\OCR_Letters
+
+        Reads the Jpg files from the jpeg_location, performs OCR on them and stores the results in the sqlite database.
+        The txt_location is used to store the text files. The letters_location is used to store the images of the letters.
+
     """
     print('|'.join(sys.argv))
     jpeg_location = sys.argv[1]
@@ -30,9 +34,12 @@ def main():
     txt_path = Path(txt_location)
     # args is a list of the command line args
     jpg_files = glob.glob(jpeg_location + '/*.jpeg')
-    print(f'Found {len(jpg_files)} jpeg files:')
+    no_jpeg_files = len(jpg_files)
+    print(f'Found {no_jpeg_files} jpeg files:')
+    if no_jpeg_files == 0:
+        print('  No files found! Exiting.')
+        return
     print(jpg_files)
-
     pytesseract.pytesseract.tesseract_cmd = TESSERACT_EXE
 
     db = tesseract_sql.DatabaseManager(sqlite_db)

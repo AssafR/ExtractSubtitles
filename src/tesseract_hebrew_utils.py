@@ -1,4 +1,5 @@
 import re
+import deprecation
 from typing import Any
 from typing_extensions import deprecated
 
@@ -61,7 +62,7 @@ class OcrBoxResult:
         return char_box_original, char_box_enlarged
 
 
-@deprecated
+@deprecated("Currently Unused")
 def new_char_filename(original_filename, letters_location, description_row):
     path = Path(original_filename)
     b = description_row.split()
@@ -73,7 +74,7 @@ def new_char_filename(original_filename, letters_location, description_row):
     return new_filename_full.as_posix()
 
 
-@deprecated
+@deprecated("Currently Unused")
 def find_best_average_image(images_enlarged):
     """ Find the best average image from a list of images
         Find by going over all n^2 possibilities
