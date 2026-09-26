@@ -196,6 +196,14 @@ merge_distances(...)           # Update distance metadata after merge
 - A future alternative is to keep the minimum correlation. This would make clusters tighter and reduce chain merges, but it could split valid glyph variations caused by different fonts, sizes, or rendering noise.
 - If the cache is changed to store distance values such as `1 - correlation`, the equivalent current policy is minimum distance.
 
+**Why homography may be too flexible for glyphs**:
+- Homography can model translation, rotation, scaling, shearing, and perspective distortion.
+- Small subtitle glyph crops usually need only translation, scale, rotation, or affine adjustment; they are flat 2D images with little real perspective distortion.
+- The extra degrees of freedom can fit background pixels, antialiasing, or noise instead of the glyph strokes.
+- This can distort thin strokes, move pixels outside the crop, blur average glyphs, or produce a high ECC score for a visually poor alignment.
+- Since ECC scores control cluster merges, this can create incorrect clusters.
+- This is a validation risk, not a confirmed defect. Euclidean and affine modes should be compared with labeled glyph pairs before changing the default.
+
 ---
 
 ### 5. **OCR Extraction Pipeline** (`create_db.py`)

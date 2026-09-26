@@ -278,18 +278,37 @@ Resolved since the original review:
 - Database insertion results are checked and failures are reported clearly.
 - The cluster averaging swap now preserves both clusters.
 - The optional OpenCV text-label path now uses `cv2.FONT_HERSHEY_PLAIN`.
+- ECC now accepts an OpenCV motion-model constant, with homography preserved
+        as the default and regression coverage for Euclidean, affine, and homography modes.
 
 Remaining defects and risks:
 
 1. Distance-cache references are not fully updated after clusters merge.
 2. ECC failures are converted to `0.0`, which hides the reason for failure.
-3. Homography-mode ECC may be unnecessarily flexible for small glyph images.
+3. Homography remains the default ECC mode and may be unnecessarily flexible for small glyph images; Euclidean and affine modes are now available for comparison.
 4. The clustering driver assumes a non-empty result and at least one multi-image cluster.
 5. `test_align.py` references an averaging function from the wrong module.
 6. The image hash does not include shape, dtype, source frame, or character identity.
 7. There are no automated tests for coordinate conversion, database relationships, ECC failure behavior, cluster invariants, or average-glyph quality.
 8. Notebook outputs and cached matrices lack dataset and preprocessing provenance.
 9. Dependency configuration is split between `Pipfile`, `pyproject.toml`, and `uv.lock`.
+
+### Why homography may be too flexible
+
+Homography can model translation, rotation, scaling, shearing, and
+perspective distortion. Small subtitle glyph crops usually need only some of
+translation, scale, rotation, or affine adjustment; they are flat 2D images
+and normally do not contain real perspective distortion.
+
+Because a small crop has few reliable pixels, the extra homography freedom can
+fit background pixels, antialiasing, or noise instead of the glyph strokes.
+This can move pixels outside the crop, change thin strokes, blur the average
+glyph, or produce a high ECC score for a visually poor alignment. That matters
+because the ECC score is used when deciding whether clusters should merge.
+
+This is a risk to measure, not proof that homography is wrong. The available
+Euclidean and affine modes should be compared on labeled glyph pairs using
+merge accuracy, stroke distortion, warp size, and cluster purity.
 
 ## Reassessing the Recommendations in `ARCHITECTURE.md`
 
@@ -301,6 +320,7 @@ Remaining defects and risks:
 - Add focused tests.
 - Completed: fix the cluster averaging typo.
 - Completed: qualify the OpenCV font constant.
+- Completed: expose the ECC motion model through OpenCV constants.
 - Add logging and meaningful error reporting.
 - Replace hardcoded letters and database names with validated command-line arguments.
 - Clarify or remove deprecated paths.
@@ -327,7 +347,7 @@ Dependencies are declared in `pyproject.toml`, but `Pipfile` is empty and enviro
 3. Add small tests for OCR coordinate conversion, image serialization, database relationships, and cluster merge invariants.
 4. Fix the cluster-image swap and distance-cache update logic.
 5. Make one reproducible command-line workflow for ingestion and one for clustering.
-6. Re-run the ECC experiments against a documented database snapshot and preprocessing configuration.
+6. Re-run the ECC experiments against a documented database snapshot and preprocessing configuration, comparing Euclidean, affine, and homography modes.
 7. Only then evaluate performance, ORB fallback, batch processing, or a persistent canonical-glyph export.
 
 ## Overall Assessment

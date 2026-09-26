@@ -74,27 +74,32 @@ class CallCountDecorator:
 
 
 @CallCountDecorator
-def transform_ecc(template_image: np.ndarray, input_image: np.ndarray) -> (float, np.ndarray, np.ndarray):
+def transform_ecc(template_image: np.ndarray, input_image: np.ndarray,
+                  warp_mode=cv2.MOTION_HOMOGRAPHY) -> (float, np.ndarray, np.ndarray):
     """
     template_image: The "base" image
     input_image: The "target" image
+    warp_mode: OpenCV motion model, such as MOTION_EUCLIDEAN, MOTION_AFFINE,
+        or MOTION_HOMOGRAPHY. The default preserves the previous behavior.
     If possible, align input_image onto template_image
     Returns: cc, warp_matrix, input_image_aligned
     Source:  https://stackoverflow.com/questions/68497827/cv2-findtransformecc-how-to-ignore-small-particles
     """
 
-    convMode = "down"  # "up"
     num_iterations = 1000
     corr_coeff = 1e-5  # 0.5
 
+    supported_warp_modes = {
+        cv2.MOTION_TRANSLATION,
+        cv2.MOTION_EUCLIDEAN,
+        cv2.MOTION_AFFINE,
+        cv2.MOTION_HOMOGRAPHY,
+    }
+    if warp_mode not in supported_warp_modes:
+        raise ValueError(f"Unsupported ECC warp mode: {warp_mode}")
+
     # Find size of image1
     template_img_size = template_image.shape
-
-    # Define the motion model
-    if convMode != "down":
-        warp_mode = cv2.MOTION_EUCLIDEAN
-    else:
-        warp_mode = cv2.MOTION_HOMOGRAPHY
 
     # Define 2x3 or 3x3 matrices and initialize the matrix to identity
     if warp_mode == cv2.MOTION_HOMOGRAPHY:

@@ -1,14 +1,16 @@
 import sys
 from pathlib import Path
 
+import cv2
 import numpy as np
+import pytest
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 from tesseract_hebrew_utils import embed_images_in_square
-from utils import ImageCluster, create_combined_image_for_clusters
+from utils import ImageCluster, create_combined_image_for_clusters, transform_ecc
 
 
 def test_create_combined_image_preserves_the_shorter_cluster():
@@ -40,3 +42,42 @@ def test_embed_images_in_square_accepts_text_label():
 
     assert output.ndim == 3
     assert output.shape[2] == 3
+
+
+@pytest.mark.parametrize(
+    ("warp_mode", "warp_shape", "warp_function"),
+    [
+        (cv2.MOTION_EUCLIDEAN, (2, 3), "affine"),
+        (cv2.MOTION_AFFINE, (2, 3), "affine"),
+        (cv2.MOTION_HOMOGRAPHY, (3, 3), "perspective"),
+    ],
+)
+def test_transform_ecc_uses_requested_warp_mode(
+    monkeypatch, warp_mode, warp_shape, warp_function
+):
+    template = np.zeros((8, 8), dtype=np.uint8)
+    input_image = np.ones((8, 8), dtype=np.uint8)
+    calls = []
+
+    def fake_find_transform_ecc(template_image, target_image, matrix, actual_mode, criteria):
+        calls.append((actual_mode, matrix.shape))
+        return 0.95, matrix
+
+    def fake_warp_affine(image, matrix, size, flags):
+        calls.append(("affine", size))
+        return image
+
+    def fake_warp_perspective(image, matrix, size, flags):
+        calls.append(("perspective", size))
+        return image
+
+    monkeypatch.setattr(cv2, "findTransformECC", fake_find_transform_ecc)
+    monkeypatch.setattr(cv2, "warpAffine", fake_warp_affine)
+    monkeypatch.setattr(cv2, "warpPerspective", fake_warp_perspective)
+
+    _, matrix, aligned = transform_ecc(template, input_image, warp_mode)
+
+    assert calls[0] == (warp_mode, warp_shape)
+    assert calls[1][0] == warp_function
+    assert matrix.shape == warp_shape
+    assert aligned is input_image
