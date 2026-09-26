@@ -234,7 +234,7 @@ python merge_letters.py
 
 **Hardcoded Parameters**:
 ```python
-sqlite_db = r'resources\letters2.sqlite'
+sqlite_db = CANONICAL_DATABASE_PATH  # Root-level letters.sqlite
 LETTER = 'ל'  # Can be changed to other Hebrew letters (e.g., 'כ', 'ו')
 ```
 
@@ -374,13 +374,12 @@ merge_letters.py
 
 ### 🔴 **Known Issues & Dead Code**
 
-1. **Hardcoded paths** (Windows-style backslashes):
+1. **Database selection**:
    ```python
-   sqlite_db = r'..\resources\letters4.sqlite'  # create_db.py
-   sqlite_db = r'resources\letters2.sqlite'     # merge_letters.py
-   sqlite_db = r'resources\letters.sqlite'      # test_align.py
+   CANONICAL_DATABASE_PATH = PROJECT_ROOT / 'letters.sqlite'
    ```
-   → Different DB files used; unclear which is canonical
+   Active scripts now use the single canonical database path. The empty
+   `letters2.sqlite` file is retained only as a historical artifact.
 
 2. **Unused file**: `resources/identifier.sqlite` (empty)
 
@@ -470,11 +469,10 @@ This is a **Hebrew subtitle extraction and glyph normalization system**. Think o
 ### Practical Workflow
 1. **To extract letters**: `python create_db.py OCR_Samples . .`
 2. **To cluster & view**: `python merge_letters.py` (hardcode letter in LETTER variable)
-3. **To inspect**: Open SQLite database with `sqlite3 resources/letters.sqlite`
+3. **To inspect**: Open SQLite database with `sqlite3 letters.sqlite`
 
 ### Known Gotchas
-- **Hardcoded paths**: Change backslashes to forward slashes for Linux/Mac
-- **Multiple DB files**: `letters.sqlite`, `letters2.sqlite`, `letters4.sqlite` — unclear which is current
+- **Canonical database**: Active workflows use root-level `letters.sqlite`; `letters2.sqlite` is an empty historical artifact
 - **Feature matching code**: Exists but isn't used; ECC is the workhorse
 - **Experimental notebooks**: Lots of exploratory analysis; don't assume they match production code
 - **Deprecated functions**: Several marked `@deprecated`; clean up if refactoring

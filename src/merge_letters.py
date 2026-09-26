@@ -4,9 +4,9 @@ import cv2
 import utils
 from utils import (ImageCluster, disp, transform_ecc)
 from cluster import ClusterManager
-from paths import DEFAULT_DATABASE_PATH
+from paths import CANONICAL_DATABASE_PATH
 
-sqlite_db = DEFAULT_DATABASE_PATH
+sqlite_db = CANONICAL_DATABASE_PATH
 
 LETTER = 'ל'
 

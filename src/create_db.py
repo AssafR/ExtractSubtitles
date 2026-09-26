@@ -6,11 +6,11 @@ from src.utils import read_image_from_file_and_fix_aspect_ratio
 from tesseract_hebrew_utils import *
 from pathlib import Path
 import tesseract_sql
-from paths import DEFAULT_DATABASE_PATH
+from paths import CANONICAL_DATABASE_PATH
 
 BOX_ENLARGE_FACTOR = 1.2
 
-sqlite_db = DEFAULT_DATABASE_PATH
+sqlite_db = CANONICAL_DATABASE_PATH
 ASPECT_RATIO_CORRECTION = 2.0
 TESSERACT_CUSTOM_CONFIG_STR = r'--oem 3 --psm 6 -l heb'
 
@@ -47,6 +47,8 @@ def main():
 
     # Save the (currently global) aspect ratio to the db
     aspect = db.insert_aspect_correction(tesseract_sql.AspectCorrection(ASPECT_RATIO_CORRECTION))  # Currently constant
+    if aspect is None:
+        raise RuntimeError('Could not store the aspect-ratio correction in the database')
 
     perform_ocr_on_jpgfiles_and_insert_into_db(aspect, db, jpg_files, letters_location, txt_path)
 
@@ -70,6 +72,8 @@ def perform_ocr_using_api_on_file_and_insert_into_db(db: tesseract_sql.DatabaseM
 
     # Save the filename to database
     sub_file: Optional[tesseract_sql.SubsFiles] = db.insert_subs_files(tesseract_sql.SubsFiles(jpgfile))
+    if sub_file is None:
+        raise RuntimeError(f'Could not store subtitle file metadata for {jpgfile}')
 
     full_img_from_file_resized, hImg, wImg = \
         read_image_from_file_and_fix_aspect_ratio(
@@ -140,7 +144,10 @@ def perform_ocr_using_api_on_file_and_insert_into_db(db: tesseract_sql.DatabaseM
                                        decoding_fk=None)
         # Store image in dataclass
         if char_box.size > 0:
-            img_data = db.insert_image(img_data)
+            inserted_image = db.insert_image(img_data)
+            if inserted_image is None:
+                raise RuntimeError(f'Could not store glyph image for {jpgfile}')
+            img_data = inserted_image
             # print(img_data)
             subs_result = tesseract_sql.SubsDecoded(
                 subs_decoded_id=None,

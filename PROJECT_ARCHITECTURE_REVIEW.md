@@ -66,7 +66,7 @@ Important behavior:
 - The enlarged bounding box is calculated, but the active persistence path appears to store the original crop.
 - `txt_filename` and `letters_location` are passed through the active flow without producing active output.
 - Database insertion results can be `None`, but callers dereference them immediately.
-- The OCR script references `..\\resources\\letters4.sqlite`, while the checked-in database inventory is inconsistent with that path.
+- The active scripts now use the canonical root-level `letters.sqlite`; older references to `letters4.sqlite` are historical documentation.
 
 ### Glyph clustering
 
@@ -133,7 +133,7 @@ The ingestion path inserts `subs_decoded.image_id_fk` but leaves `images.decodin
 
 The SQL schema declares foreign keys, but the Python connection does not clearly enable SQLite foreign-key enforcement with `PRAGMA foreign_keys = ON`.
 
-Database and schema paths are process-relative and differ between scripts, notebooks, and tests. The repository therefore does not establish one reliable canonical database.
+The active Python scripts now resolve the schema and canonical database from the project root. Some notebooks still contain historical relative paths and need separate cleanup.
 
 ## Module Roles
 
@@ -252,27 +252,33 @@ These represent earlier OCR, matching, or averaging approaches that were superse
 
 ## Confirmed Defects and Risks
 
-1. Database and schema paths are inconsistent and depend on the working directory.
-2. The active scripts refer to different database generations, so the intended canonical database is unclear.
-3. Nullable database insertion results are dereferenced without checks.
-4. The cluster image-size swap in `utils.py` assigns `cluster1` to itself instead of preserving `cluster2`.
-5. Distance-cache references are not fully updated after clusters merge.
-6. ECC failures are converted to `0.0`, which hides the reason for failure.
-7. Homography-mode ECC may be unnecessarily flexible for small glyph images.
-8. The clustering driver assumes a non-empty result and at least one multi-image cluster.
-9. `test_align.py` references an averaging function from the wrong module.
-10. `FONT_HERSHEY_PLAIN` is referenced without the required `cv2.` qualification.
-11. The image hash does not include shape, dtype, source frame, or character identity.
-12. There are no automated tests for coordinate conversion, database relationships, ECC failure behavior, cluster invariants, or average-glyph quality.
-13. Notebook outputs and cached matrices lack dataset and preprocessing provenance.
-14. Dependency configuration is split between `Pipfile`, `pyproject.toml`, and `uv.lock`.
+Resolved since the original review:
+
+- Active scripts now share `CANONICAL_DATABASE_PATH` and no longer select different database generations.
+- Database and schema paths are resolved from the project root instead of the working directory.
+- A pytest regression covers path resolution and missing read-only databases.
+
+Remaining defects and risks:
+
+1. Nullable database insertion results are dereferenced without checks.
+2. The cluster image-size swap in `utils.py` assigns `cluster1` to itself instead of preserving `cluster2`.
+3. Distance-cache references are not fully updated after clusters merge.
+4. ECC failures are converted to `0.0`, which hides the reason for failure.
+5. Homography-mode ECC may be unnecessarily flexible for small glyph images.
+6. The clustering driver assumes a non-empty result and at least one multi-image cluster.
+7. `test_align.py` references an averaging function from the wrong module.
+8. `FONT_HERSHEY_PLAIN` is referenced without the required `cv2.` qualification.
+9. The image hash does not include shape, dtype, source frame, or character identity.
+10. There are no automated tests for coordinate conversion, database relationships, ECC failure behavior, cluster invariants, or average-glyph quality.
+11. Notebook outputs and cached matrices lack dataset and preprocessing provenance.
+12. Dependency configuration is split between `Pipfile`, `pyproject.toml`, and `uv.lock`.
 
 ## Reassessing the Recommendations in `ARCHITECTURE.md`
 
 ### Confirmed current issues
 
-- Reconcile SQLite database files.
-- Replace process-relative and Windows-specific paths.
+- Completed: reconcile SQLite database files around root-level `letters.sqlite`.
+- Completed for active scripts: replace process-relative database and schema paths.
 - Add focused tests.
 - Fix the cluster averaging typo.
 - Fix the missing OpenCV font constant.

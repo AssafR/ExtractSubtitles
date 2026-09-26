@@ -19,16 +19,19 @@ CORRELATION_THRESHOLD_FOR_DISMISSAL = 0.7
 FRACTION_OF_TOO_FAR_TO_ELIMINATE = 0.5
 
 def disp(img, title=None):
+    """Show an image and wait until the display window is closed."""
     view_image_wait_key(img, title)
 
 
 def view_image_wait_key(img, title=None):
+    """Display an image with OpenCV and wait for a key press."""
     cv2.imshow(title, img)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
 
 def trim_to_smallest_rectangle(original_image):
+    """Crop an image to the first external foreground contour."""
     # Read the image
     # Threshold the image to get a binary image
     _, binary_image = cv2.threshold(original_image, 128, 255, cv2.THRESH_BINARY)
@@ -55,15 +58,18 @@ class CallCountDecorator:
     """
 
     def __init__(self, inline_func):
+        """Create a decorator that counts calls to a function."""
         self.call_count = 0
         self.inline_func = inline_func
 
     def __call__(self, *args, **kwargs):
+        """Count a call and then run the decorated function."""
         self.call_count += 1
         self._print_call_count()
         return self.inline_func(*args, **kwargs)
 
     def _print_call_count(self):
+        """Print the current call count for the decorated function."""
         print(f" * The method {self.inline_func.__name__} called {self.call_count} times")
 
 
@@ -132,6 +138,29 @@ def transform_ecc(template_image: np.ndarray, input_image: np.ndarray) -> (float
 
 @dataclass(order=True)  # , eq=False
 class ImageCluster:
+    """Store one group of similar subtitle character images.
+
+    The purpose of this class is glyph normalization. It groups different
+    images of the same character and stores enough data to make one example
+    image for the group.
+
+    ``ClusterManager`` first creates one cluster for each database image.
+    Later, two clusters can be joined with ``+``. Their images are aligned
+    with ECC and combined using their image counts.
+
+    Attributes:
+        total: Number of source images in the cluster.
+        avg_cc: ECC similarity score from the latest merge. A new single-image
+            cluster starts with ``0.0`` because it has not been compared yet.
+        representative_id: Smallest database image ID in the cluster. It is
+            used as the cluster's key.
+        avg_img: Preprocessed grayscale image used for comparison and merging.
+            Images must have compatible sizes.
+        source_images: Database image IDs that belong to the cluster.
+
+    This class only stores data in memory. It does not save clusters or
+    average images in SQLite.
+    """
     total: int
     avg_cc: float
     representative_id: int  # The "representative_id" of the group is the smallest id of all the images in the group
@@ -141,6 +170,7 @@ class ImageCluster:
     default_transform_func = transform_ecc
 
     def __add__(self, other):
+        """Merge two clusters and return their weighted average cluster."""
         # Implement addition behavior
         new_total = self.total + other.total
         new_representative_id = min(self.representative_id, other.representative_id)
@@ -155,6 +185,7 @@ class ImageCluster:
 
 
 def weighted_average_of_images(img1, img2, weight1, weight2):
+    """Return the weighted pixel average of two same-sized images."""
     assert img1.shape == img2.shape, "Images must have the same shape"
     all_weight = weight1 + weight2
     img_combined_float = weight1 * img1.astype(np.float64) + (all_weight - weight1) * img2.astype(np.float64)
@@ -177,11 +208,13 @@ def append_left_if_doesnt_exist(de_queue: collections.deque, element):
 
 
 def get_file_attributes(file_name):
+    """Return a file's name, parent directory, and creation date."""
     file_path = Path(file_name)
     return str(file_path.name), str(file_path.parent), get_file_date(file_name)
 
 
 def create_combined_image_for_clusters(cluster1: ImageCluster, cluster2: ImageCluster, transform_func):
+    """Align two cluster averages and combine them using cluster sizes."""
     if cluster1.avg_img.shape[0] < cluster2.avg_img.shape[0]:
         cluster1, cluster2 = cluster1, cluster1  # 1 is the larger image
     cc, warp_matrix, warped = transform_func(cluster1.avg_img,
@@ -191,6 +224,7 @@ def create_combined_image_for_clusters(cluster1: ImageCluster, cluster2: ImageCl
 
 
 def get_file_date(file_name: Path):
+    """Return a file's creation date, or ``None`` if the file is missing."""
     if os.path.exists(file_name):
         creation_timestamp = os.path.getctime(file_name)
         creation_datetime = datetime.datetime.fromtimestamp(creation_timestamp)
@@ -200,6 +234,7 @@ def get_file_date(file_name: Path):
 
 
 def adjust_image_post_process(image):
+    """Remove low values and blur an image for comparison or display."""
     _, image_blur = cv2.threshold(image, thresh=64, maxval=255, type=cv2.THRESH_TOZERO)
     # _, image_blur = cv2.threshold(image_blur, thresh=64, maxval=255, type=cv2.THRESH_TOZERO)
     # avg_blur = cv2.medianBlur(avg_blur, 15)
@@ -208,6 +243,7 @@ def adjust_image_post_process(image):
 
 
 def pre_process_images(images, enlarge_ratio=None, border_size=BORDER_SIZE, invert=True):
+    """Prepare images by converting, bordering, inverting, resizing, and blurring."""
     images = convert_images_to_greyscale_if_necessary(images)
     images_enlarged = [cv2.copyMakeBorder(  # Convert to Greyscale and add border
         img,
@@ -225,17 +261,20 @@ def pre_process_images(images, enlarge_ratio=None, border_size=BORDER_SIZE, inve
 
 
 def convert_images_to_greyscale_if_necessary(images):
+    """Convert color images to grayscale and leave grayscale images unchanged."""
     if len(images[0].shape) == 3:  # Concert to Greyscale if not already
         images = [cv2.cvtColor(img, cv2.COLOR_BGR2GRAY) for img in images]
     return images
 
 
 def invert_images(images):
+    """Invert each image so dark pixels become light and vice versa."""
     images = [255 - img for img in images]  # Convert to negative (White on Black)
     return images
 
 
 def reverse_pre_process_images(images, enlarge_ratio=None):
+    """Apply the source-image preparation steps used for display."""
     images_enlarged = [cv2.copyMakeBorder(  # Convert to Greyscale and add border
         cv2.cvtColor(img, cv2.COLOR_BGR2GRAY),
         BORDER_SIZE, BORDER_SIZE, BORDER_SIZE, BORDER_SIZE,
@@ -250,6 +289,7 @@ def reverse_pre_process_images(images, enlarge_ratio=None):
 
 
 def read_image_from_file_and_fix_aspect_ratio(sub_filename: str, aspect_ratio: float) -> Tuple[np.ndarray, float, float]:
+    """Read an image, resize its width, and return the image and its size."""
     img_original = cv2.imread(sub_filename)
     hImg, wImg, _ = img_original.shape
 

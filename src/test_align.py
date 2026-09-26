@@ -3,9 +3,9 @@ import tesseract_sql
 import cv2
 
 import utils
-from paths import DEFAULT_DATABASE_PATH
+from paths import CANONICAL_DATABASE_PATH
 
-sqlite_db = DEFAULT_DATABASE_PATH
+sqlite_db = CANONICAL_DATABASE_PATH
 
 
 # view_image_wait_key(all_images)

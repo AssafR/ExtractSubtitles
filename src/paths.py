@@ -3,7 +3,8 @@ from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 SCHEMA_PATH = PROJECT_ROOT / "resources" / "letters.sql"
-DEFAULT_DATABASE_PATH = PROJECT_ROOT / "letters.sqlite"
+CANONICAL_DATABASE_PATH = PROJECT_ROOT / "letters.sqlite"
+DEFAULT_DATABASE_PATH = CANONICAL_DATABASE_PATH
 
 
 def resolve_project_path(path: str | Path) -> Path:
