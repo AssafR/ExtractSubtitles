@@ -86,6 +86,7 @@ class ClusterManager(object):
                 current = next_cluster
                 if new_distances_calculated_in_loop == 0:  # A stop condition - nothing changed in this iteration
                     break
+                new_distances_calculated_in_loop = 0
                 continue
 
             if current is None or self.clusters[current] is None:
