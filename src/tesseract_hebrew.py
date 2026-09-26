@@ -1,10 +1,11 @@
 import tesseract_sql
 from tesseract_hebrew_utils import *
 from deprecation import deprecated
+from paths import DEFAULT_DATABASE_PATH
 
 # INSERT OR IGNORE INTO aspect_corrections(aspect) VALUES(4.0);
 
-sqlite_db = r'..\resources\letters4.sqlite'
+sqlite_db = DEFAULT_DATABASE_PATH
 
 COLOR_GREEN = (0, 255, 0)
 

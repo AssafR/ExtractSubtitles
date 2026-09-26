@@ -4,8 +4,9 @@ import cv2
 import utils
 from utils import (ImageCluster, disp, transform_ecc)
 from cluster import ClusterManager
+from paths import DEFAULT_DATABASE_PATH
 
-sqlite_db = r'resources\letters2.sqlite'
+sqlite_db = DEFAULT_DATABASE_PATH
 
 LETTER = 'ל'
 
@@ -28,7 +29,7 @@ def create_representative_letter(db, letter):
 
 
 def main():
-    db = tesseract_sql.DatabaseManager(sqlite_db)
+    db = tesseract_sql.DatabaseManager(sqlite_db, create_if_missing=False)
     # letter = 'כ'  # 'ו'
     letter = LETTER
 

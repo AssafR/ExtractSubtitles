@@ -3,8 +3,9 @@ import tesseract_sql
 import cv2
 
 import utils
+from paths import DEFAULT_DATABASE_PATH
 
-sqlite_db = r'resources\letters.sqlite'
+sqlite_db = DEFAULT_DATABASE_PATH
 
 
 # view_image_wait_key(all_images)
@@ -20,7 +21,7 @@ def disp(img):
 
 
 def main():
-    db = tesseract_sql.DatabaseManager(sqlite_db)
+    db = tesseract_sql.DatabaseManager(sqlite_db, create_if_missing=False)
     images_sql_unsorted = db.read_images_by_text_orderby_id('כ')
     images_sql = sorted(images_sql_unsorted, key=lambda x: x.image_id, reverse=False)
     images = [img.image for img in images_sql]

@@ -5,11 +5,12 @@ import numpy as np
 import io
 import hashlib
 import utils
+from paths import SCHEMA_PATH, resolve_project_path
 from dataclasses import dataclass
 from contextlib import closing
 from typing import Optional
 
-SQL_CREATION_SCRIPT = r'..\resources\letters.sql'
+SQL_CREATION_SCRIPT = SCHEMA_PATH
 
 
 @dataclass
@@ -104,7 +105,7 @@ class SubsFiles:
 
 def create_connection(db_file_name):
     """ Create a database connection to a SQLite database."""
-    db_file_abs_path = pathlib.Path(db_file_name).absolute()
+    db_file_abs_path = resolve_project_path(db_file_name)
     return sqlite3.connect(db_file_abs_path,
                            detect_types=sqlite3.PARSE_DECLTYPES | sqlite3.PARSE_COLNAMES  # For parsing datetypes
                            )
@@ -113,12 +114,18 @@ def create_connection(db_file_name):
 class DatabaseManager:
     """A class to manage the SQLite database."""
 
-    def __init__(self, database):
+    def __init__(self, database, schema_path=SQL_CREATION_SCRIPT, create_if_missing=True):
         """ Create a connection to the database."""
+        self.database_path = resolve_project_path(database)
+        if not create_if_missing and not self.database_path.exists():
+            raise FileNotFoundError(f'Database does not exist: {self.database_path}')
+        self.schema_path = resolve_project_path(schema_path)
+        if not self.schema_path.is_file():
+            raise FileNotFoundError(f'Schema does not exist: {self.schema_path}')
         self.conn = create_connection(database)
 
         # Execute the SQL query creating the database tables if they don't exist
-        with open(SQL_CREATION_SCRIPT, 'r') as file:
+        with self.schema_path.open('r', encoding='cp1252') as file:
             sql_query = file.read()
             self.conn.executescript(sql_query)
 

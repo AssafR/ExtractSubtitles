@@ -6,10 +6,11 @@ from src.utils import read_image_from_file_and_fix_aspect_ratio
 from tesseract_hebrew_utils import *
 from pathlib import Path
 import tesseract_sql
+from paths import DEFAULT_DATABASE_PATH
 
 BOX_ENLARGE_FACTOR = 1.2
 
-sqlite_db = r'..\resources\letters4.sqlite'
+sqlite_db = DEFAULT_DATABASE_PATH
 ASPECT_RATIO_CORRECTION = 2.0
 TESSERACT_CUSTOM_CONFIG_STR = r'--oem 3 --psm 6 -l heb'
 
