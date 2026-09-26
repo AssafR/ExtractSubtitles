@@ -154,16 +154,28 @@ class ClusterManager(object):
         return self.base_images_sql, self.no_images
 
     def merge_distances(self, distances: SortedDict, cluster1: ImageCluster, cluster2: ImageCluster):
-        # Two clusters are about to be merged together
-        # Their distances should be updated accordingly.
+        """Update cached similarities after two clusters are merged.
+
+        The cache stores ECC correlation scores, not distances. The current
+        policy keeps the maximum correlation known for the merged cluster and
+        each neighboring cluster. This is a permissive, single-linkage-like
+        rule: one similar member can keep two groups connected. If the cache
+        stored ``1 - correlation`` instead, the equivalent rule would be to
+        keep the minimum distance.
+
+        A stricter future policy could keep the minimum correlation instead.
+        That would produce tighter clusters, but could split valid glyph
+        variations caused by different fonts, sizes, or rendering noise.
+        """
+        # Two clusters are about to be merged.
         # Assumption: Cluster1 contains images i1,...,im but only i1 (smallest) is the representative id
         #             Cluster2 contains images j1,...,jn but only j1 (smallest) is the representative id
         # Cases:
         #  WLG, i1 is the new representative
         #    (i1,i1) = 1.0
         #    for each k<>i in Cluster1+Cluster2 : (i,k) and (k,i) should be deleted
-        #    for each k<>i not in Cluster1/Cluster2: The new (i,k)|(k,i) should be the minimum
-        #             of all (k,l) for l in (Cluster1+Cluster2 -> {i} join {j})
+        #    for each k<>i not in Cluster1/Cluster2: keep the maximum correlation
+        #             known for k against either source cluster.
 
         # Assuming cluster1 has smaller representative id and so will remain representative of the combined cluster
 
@@ -176,6 +188,7 @@ class ClusterManager(object):
             # Each cluster_no is a possible known distance to another cluster
             warp_result_1 = dist_dict_1.pop(cluster_no, RegistrationResult(0.0, None))
             warp_result_2 = dist_dict_2.pop(cluster_no, RegistrationResult(0.0, None))
+            # Correlation is a similarity score: larger means more similar.
             if warp_result_1.cc > warp_result_2.cc:
                 warp_result = warp_result_1
             else:

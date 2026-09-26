@@ -81,6 +81,18 @@ The second active path begins in `src/merge_letters.py`.
 7. Merged images become weighted averages.
 8. The largest surviving clusters are displayed with OpenCV.
 
+The distance cache actually stores ECC correlation scores, not distances.
+The current merge policy keeps the maximum correlation known between either
+source cluster and a neighboring cluster. This is a permissive,
+single-linkage-like rule: one similar member can keep two groups connected.
+
+A future alternative is to keep the minimum correlation. This would make
+clusters tighter and reduce chain merges, which can improve cluster purity.
+Its weakness is that it may split valid glyph variations caused by different
+fonts, sizes, antialiasing, or small crop differences. If the cache stored
+`1 - correlation` as a real distance, the equivalent of the current policy
+would be to keep the minimum distance.
+
 The clustering result is held in memory. It is not written back to SQLite.
 
 ## Technology Responsibilities

@@ -169,7 +169,7 @@ MIN_MATCHES = 2                    # Minimum matched features to proceed
    - Re-queue for next round until convergence
 3. **Merge Operation**:
    - Combine cluster metadata (average image, representative ID)
-   - Update distance dictionary with best correlation from both clusters
+   - Update the correlation cache with the maximum known correlation from both clusters
    - Weighted average: new_avg = (img1 × count1 + img2 × count2) / (count1 + count2)
 4. **Output**:
    - `self.clusters`: Dict of surviving clusters, sorted by size
@@ -188,6 +188,13 @@ merge_distances(...)           # Update distance metadata after merge
 - Uses `transform_ecc()` (from `utils.py`) to register images
 - Computes weighted average → post-processes (threshold, blur, trim)
 - Displays visualization: source images + registered images + difference map
+
+**Linkage policy**:
+- The cache stores ECC correlation scores, where a larger value means greater similarity.
+- After a merge, the implementation keeps the maximum correlation known against either source cluster.
+- This is permissive and similar to single-linkage clustering: one similar member can keep two groups connected.
+- A future alternative is to keep the minimum correlation. This would make clusters tighter and reduce chain merges, but it could split valid glyph variations caused by different fonts, sizes, or rendering noise.
+- If the cache is changed to store distance values such as `1 - correlation`, the equivalent current policy is minimum distance.
 
 ---
 
