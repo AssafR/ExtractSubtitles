@@ -1,0 +1,17 @@
+[project]
+name = "extract-subtitles"
+version = "0.1.0"
+description = "OCR and image-processing utilities for extracting subtitles"
+requires-python = ">=3.11"
+dependencies = [
+    "numpy",
+    "opencv-python",
+    "pytesseract",
+    "sortedcontainers",
+]
+
+[dependency-groups]
+dev = [
+    "deprecation",
+    "jupyter",
+]
