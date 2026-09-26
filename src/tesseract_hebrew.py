@@ -1,9 +1,10 @@
 import tesseract_sql
 from tesseract_hebrew_utils import *
+from deprecation import deprecated
 
 # INSERT OR IGNORE INTO aspect_corrections(aspect) VALUES(4.0);
 
-sqlite_db = r'resources\letters.sqlite'
+sqlite_db = r'..\resources\letters4.sqlite'
 
 COLOR_GREEN = (0, 255, 0)
 
@@ -38,10 +39,10 @@ def main():
 
     img1, img2 = images_enlarged[0], images_enlarged[1]
 
-    # all_images = hconcat_resize_max([img.image for img in images])  # cv2.hconcat(images)
-    # cv2.imshow('img', all_images)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
+    all_images = hconcat_resize_max([img.image for img in images])  # cv2.hconcat(images)
+    cv2.imshow('img', all_images)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
 
 
 if __name__ == '__main__':

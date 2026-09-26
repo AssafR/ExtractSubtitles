@@ -5,3 +5,9 @@
 /letters.sqlite
 /Pipfile.lock
 /.venv/
+/.idea/
+/src/__pycache__/
+/resources/letters - Copy (2).sqlite
+/resources/*.sqlite
+*.sqlite
+

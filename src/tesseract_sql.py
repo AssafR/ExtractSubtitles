@@ -11,6 +11,7 @@ from typing import Optional
 
 SQL_CREATION_SCRIPT = r'..\resources\letters.sql'
 
+
 @dataclass
 class AspectCorrection:
     """A class to represent an aspect ratio correction in the database."""
