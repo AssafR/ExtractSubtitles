@@ -65,7 +65,7 @@ Important behavior:
 - Only `.jpeg` files are matched; `.jpg` input is skipped.
 - The enlarged bounding box is calculated, but the active persistence path appears to store the original crop.
 - `txt_filename` and `letters_location` are passed through the active flow without producing active output.
-- Database insertion results can be `None`, but callers dereference them immediately.
+- Database insertion results are checked and clear errors are raised if an insert fails.
 - The active scripts now use the canonical root-level `letters.sqlite`; older references to `letters4.sqlite` are historical documentation.
 
 ### Glyph clustering
@@ -216,9 +216,15 @@ This research is related to the distance cache later maintained inside `ClusterM
 
 #### Current condition
 
-The notebook contains stale names such as `transform_ECC` and `read_images_by_text_orderbyid`, while the current source uses lowercase `transform_ecc` and a different query method name. It uses database paths that differ from the active scripts. Its cached matrices have no recorded database snapshot, preprocessing version, or threshold provenance.
+The executable notebook source now uses `transform_ecc`,
+`read_images_by_text_orderby_id`, the current preprocessing helper, and the
+canonical project database path. A provenance cell records the database,
+schema, preprocessing settings, thresholds, and matrix filename.
 
-The notebook contains historical outputs and execution counts, but those outputs should not be interpreted as a reproducible current run.
+The notebook still contains historical output text from older runs, including
+the old `transform_ECC` label. The cached matrix is still an exploratory
+artifact rather than a database snapshot with an embedded content hash, so it
+must be regenerated when the database or preprocessing settings change.
 
 ### `notebooks/experiment_efficient_ecc.py`
 
@@ -269,21 +275,21 @@ Resolved since the original review:
 - Active scripts now share `CANONICAL_DATABASE_PATH` and no longer select different database generations.
 - Database and schema paths are resolved from the project root instead of the working directory.
 - A pytest regression covers path resolution and missing read-only databases.
+- Database insertion results are checked and failures are reported clearly.
 
 Remaining defects and risks:
 
-1. Nullable database insertion results are dereferenced without checks.
-2. The cluster image-size swap in `utils.py` assigns `cluster1` to itself instead of preserving `cluster2`.
-3. Distance-cache references are not fully updated after clusters merge.
-4. ECC failures are converted to `0.0`, which hides the reason for failure.
-5. Homography-mode ECC may be unnecessarily flexible for small glyph images.
-6. The clustering driver assumes a non-empty result and at least one multi-image cluster.
-7. `test_align.py` references an averaging function from the wrong module.
-8. `FONT_HERSHEY_PLAIN` is referenced without the required `cv2.` qualification.
-9. The image hash does not include shape, dtype, source frame, or character identity.
-10. There are no automated tests for coordinate conversion, database relationships, ECC failure behavior, cluster invariants, or average-glyph quality.
-11. Notebook outputs and cached matrices lack dataset and preprocessing provenance.
-12. Dependency configuration is split between `Pipfile`, `pyproject.toml`, and `uv.lock`.
+1. The cluster image-size swap in `utils.py` assigns `cluster1` to itself instead of preserving `cluster2`.
+2. Distance-cache references are not fully updated after clusters merge.
+3. ECC failures are converted to `0.0`, which hides the reason for failure.
+4. Homography-mode ECC may be unnecessarily flexible for small glyph images.
+5. The clustering driver assumes a non-empty result and at least one multi-image cluster.
+6. `test_align.py` references an averaging function from the wrong module.
+7. `FONT_HERSHEY_PLAIN` is referenced without the required `cv2.` qualification.
+8. The image hash does not include shape, dtype, source frame, or character identity.
+9. There are no automated tests for coordinate conversion, database relationships, ECC failure behavior, cluster invariants, or average-glyph quality.
+10. Notebook outputs and cached matrices lack dataset and preprocessing provenance.
+11. Dependency configuration is split between `Pipfile`, `pyproject.toml`, and `uv.lock`.
 
 ## Reassessing the Recommendations in `ARCHITECTURE.md`
 
@@ -291,10 +297,10 @@ Remaining defects and risks:
 
 - Completed: reconcile SQLite database files around root-level `letters.sqlite`.
 - Completed for active scripts: replace process-relative database and schema paths.
+- Completed: check nullable database insertion results and report failures clearly.
 - Add focused tests.
 - Fix the cluster averaging typo.
 - Fix the missing OpenCV font constant.
-- Add validation around nullable database results.
 - Add logging and meaningful error reporting.
 - Replace hardcoded letters and database names with validated command-line arguments.
 - Clarify or remove deprecated paths.

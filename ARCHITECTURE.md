@@ -369,7 +369,7 @@ merge_letters.py
    - Analyzes pre-computed distance matrices (`.npy` files)
    - Histogram distributions, best-match heuristics
    - Pre-computed matrices suggest this was an optimization study
-   - Status: Analysis artifact; not integrated into production flow
+   - Status: Analysis artifact; executable API names and project paths are updated, but it is not integrated into production flow
 
 3. **`test_align.py`**
    - Minimal test harness; runs alignment on first 10 images
