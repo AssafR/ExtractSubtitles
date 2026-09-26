@@ -10,4 +10,4 @@
 /resources/letters - Copy (2).sqlite
 /resources/*.sqlite
 *.sqlite
-
+/tests/__pycache__/

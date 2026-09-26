@@ -394,18 +394,11 @@ merge_letters.py
    - Lines 65-195: Extensive commented-out code for alternate extraction methods
    - Was probably earlier experimentation with different box extraction approaches
 
-4. **Bug candidate** in `utils.py` line 186:
-   ```python
-   if cluster1.avg_img.shape[0] < cluster2.avg_img.shape[0]:
-       cluster1, cluster2 = cluster1, cluster1  # ← Should be cluster2?
-   ```
-   → Might always assign cluster1 to itself (typo)
+4. **Fixed cluster averaging typo** in `utils.py`:
+   The cluster swap now preserves `cluster2` when it is the larger image.
 
-5. **Missing function reference** in `tesseract_hebrew_utils.py` line 164:
-   ```python
-   cv2.putText(output_img, text, (16, 16), fontFace=FONT_HERSHEY_PLAIN, ...)
-   # ↑ FONT_HERSHEY_PLAIN is not imported; likely cv2.FONT_HERSHEY_PLAIN
-   ```
+5. **Fixed OpenCV font reference** in `tesseract_hebrew_utils.py`:
+   The optional text-label path now uses `cv2.FONT_HERSHEY_PLAIN`.
 
 6. **Unused import**: `Pipfile` lists Python 3.12.2 but includes no packages; dependencies are implicit
 
@@ -529,7 +522,7 @@ This is a **Hebrew subtitle extraction and glyph normalization system**. Think o
 ### Short-term (Robustness)
 1. [ ] Add unit tests → Test `transform_ecc`, clustering logic
 2. [ ] Fix bug in `create_combined_image_for_clusters()` (line 186)
-3. [ ] Fix missing import `FONT_HERSHEY_PLAIN`
+3. [x] Fix cluster averaging typo and qualify `cv2.FONT_HERSHEY_PLAIN`
 4. [ ] Remove deprecated code or clearly version it
 5. [ ] Add docstrings to main classes
 

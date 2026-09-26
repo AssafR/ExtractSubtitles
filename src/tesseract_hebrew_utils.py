@@ -161,7 +161,7 @@ def embed_images_in_square(im_list, spacing, text=None):
         insert_image(output_img, image, img_pos_y, img_pos_x)
 
     if text:
-        cv2.putText(output_img, text, (16, 16), fontFace=FONT_HERSHEY_PLAIN, fontScale=1.5,
+        cv2.putText(output_img, text, (16, 16), fontFace=cv2.FONT_HERSHEY_PLAIN, fontScale=1.5,
                     color=(0, 255, 0), thickness=2)
 
     return output_img

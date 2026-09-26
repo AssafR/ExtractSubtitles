@@ -276,20 +276,20 @@ Resolved since the original review:
 - Database and schema paths are resolved from the project root instead of the working directory.
 - A pytest regression covers path resolution and missing read-only databases.
 - Database insertion results are checked and failures are reported clearly.
+- The cluster averaging swap now preserves both clusters.
+- The optional OpenCV text-label path now uses `cv2.FONT_HERSHEY_PLAIN`.
 
 Remaining defects and risks:
 
-1. The cluster image-size swap in `utils.py` assigns `cluster1` to itself instead of preserving `cluster2`.
-2. Distance-cache references are not fully updated after clusters merge.
-3. ECC failures are converted to `0.0`, which hides the reason for failure.
-4. Homography-mode ECC may be unnecessarily flexible for small glyph images.
-5. The clustering driver assumes a non-empty result and at least one multi-image cluster.
-6. `test_align.py` references an averaging function from the wrong module.
-7. `FONT_HERSHEY_PLAIN` is referenced without the required `cv2.` qualification.
-8. The image hash does not include shape, dtype, source frame, or character identity.
-9. There are no automated tests for coordinate conversion, database relationships, ECC failure behavior, cluster invariants, or average-glyph quality.
-10. Notebook outputs and cached matrices lack dataset and preprocessing provenance.
-11. Dependency configuration is split between `Pipfile`, `pyproject.toml`, and `uv.lock`.
+1. Distance-cache references are not fully updated after clusters merge.
+2. ECC failures are converted to `0.0`, which hides the reason for failure.
+3. Homography-mode ECC may be unnecessarily flexible for small glyph images.
+4. The clustering driver assumes a non-empty result and at least one multi-image cluster.
+5. `test_align.py` references an averaging function from the wrong module.
+6. The image hash does not include shape, dtype, source frame, or character identity.
+7. There are no automated tests for coordinate conversion, database relationships, ECC failure behavior, cluster invariants, or average-glyph quality.
+8. Notebook outputs and cached matrices lack dataset and preprocessing provenance.
+9. Dependency configuration is split between `Pipfile`, `pyproject.toml`, and `uv.lock`.
 
 ## Reassessing the Recommendations in `ARCHITECTURE.md`
 
@@ -299,8 +299,8 @@ Remaining defects and risks:
 - Completed for active scripts: replace process-relative database and schema paths.
 - Completed: check nullable database insertion results and report failures clearly.
 - Add focused tests.
-- Fix the cluster averaging typo.
-- Fix the missing OpenCV font constant.
+- Completed: fix the cluster averaging typo.
+- Completed: qualify the OpenCV font constant.
 - Add logging and meaningful error reporting.
 - Replace hardcoded letters and database names with validated command-line arguments.
 - Clarify or remove deprecated paths.

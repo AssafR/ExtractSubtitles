@@ -216,7 +216,7 @@ def get_file_attributes(file_name):
 def create_combined_image_for_clusters(cluster1: ImageCluster, cluster2: ImageCluster, transform_func):
     """Align two cluster averages and combine them using cluster sizes."""
     if cluster1.avg_img.shape[0] < cluster2.avg_img.shape[0]:
-        cluster1, cluster2 = cluster1, cluster1  # 1 is the larger image
+        cluster1, cluster2 = cluster2, cluster1  # 1 is the larger image
     cc, warp_matrix, warped = transform_func(cluster1.avg_img,
                                              cluster2.avg_img)  # Project smaller onto larger image transform_ecc
     combined = weighted_average_of_images(cluster1.avg_img, warped, cluster1.total, cluster2.total)
