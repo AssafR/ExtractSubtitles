@@ -9,6 +9,7 @@ import pytest
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
+import merge_letters
 from tesseract_hebrew_utils import embed_images_in_square
 from utils import ImageCluster, create_combined_image_for_clusters, transform_ecc
 
@@ -81,3 +82,35 @@ def test_transform_ecc_uses_requested_warp_mode(
     assert calls[1][0] == warp_function
     assert matrix.shape == warp_shape
     assert aligned is input_image
+
+
+def test_create_representative_letter_returns_consistent_empty_result():
+    class EmptyDatabase:
+        def read_images_by_text_orderby_id(self, letter):
+            return []
+
+    assert merge_letters.create_representative_letter(EmptyDatabase(), "ל") == ([], 0, None)
+
+
+def test_display_letter_results_handles_singleton_cluster(monkeypatch):
+    image = np.zeros((8, 8), dtype=np.uint8)
+    cluster = ImageCluster(1, 0.0, 1, image, [1])
+    transform_calls = []
+
+    def fake_transform(template, target):
+        transform_calls.append((template, target))
+        return 1.0, None, target
+
+    monkeypatch.setattr(merge_letters, "transform_ecc", fake_transform)
+    monkeypatch.setattr(merge_letters, "disp", lambda *args: None)
+    monkeypatch.setattr(
+        merge_letters.tesseract_hebrew_utils,
+        "hconcat_resize_max",
+        lambda images, interpolation=None: image,
+    )
+
+    merge_letters.display_letter_results([], 1, {1: cluster}, image)
+
+    assert len(transform_calls) == 1
+    assert transform_calls[0][0] is image
+    assert transform_calls[0][1] is image

@@ -21,7 +21,7 @@ def create_representative_letter(db, letter):
     no_images = len(images_sql)
     print(f'Number of images: {no_images}')
     if no_images == 0:
-        return [], 0
+        return [], 0, None
 
     cluster_manager = ClusterManager(images_sql)
     cluster_manager.cluster_letters()
@@ -34,6 +34,9 @@ def main():
     letter = LETTER
 
     images_sql, no_images, cluster_manager = create_representative_letter(db, letter)
+    if cluster_manager is None:
+        print(f'No images found for letter: {letter}')
+        return
 
     display_letter_results(images_sql, no_images, cluster_manager.clusters, cluster_manager.avg_image)
 
@@ -46,17 +49,25 @@ def display_letter_results(images_sql, no_images, largest_clusters, image):
         # else:
         #     print(f'Cluster #{cluster_no}: None')
     print(f'Total images: {no_images}')
-    biggest_clusters_images = [cluster.avg_img for cluster_id, cluster in largest_clusters.items() if cluster.total > 1]
-    biggest_clusters_images.append(biggest_clusters_images[0])  # Handle the edge case of size 1
-    cc, warp_matrix, im_aligned = transform_ecc(biggest_clusters_images[0], biggest_clusters_images[1])
+    surviving_clusters = [cluster for cluster in largest_clusters.values() if cluster is not None]
+    if not surviving_clusters:
+        print('No surviving clusters to display')
+        return
+
+    biggest_clusters_images = [cluster.avg_img for cluster in surviving_clusters if cluster.total > 1]
+    if not biggest_clusters_images:
+        biggest_clusters_images = [surviving_clusters[0].avg_img]
+    comparison_images = biggest_clusters_images if len(biggest_clusters_images) > 1 else biggest_clusters_images * 2
+    cc, warp_matrix, im_aligned = transform_ecc(comparison_images[0], comparison_images[1])
     print(f'cc={cc}')
     disp(image, 'avg_image')
-    disp(tesseract_hebrew_utils.hconcat_resize_max(biggest_clusters_images + [image], interpolation=cv2.INTER_CUBIC), 'biggest_clusters_images')
-    best_cluster: ImageCluster = largest_clusters[list(largest_clusters.keys())[0]]
+    disp(tesseract_hebrew_utils.hconcat_resize_max(comparison_images + [image], interpolation=cv2.INTER_CUBIC), 'biggest_clusters_images')
+    best_cluster: ImageCluster = surviving_clusters[0]
     non_aligned_images = [image_sql.image for image_sql in images_sql if
                           image_sql.image_id not in best_cluster.source_images]
-    non_aligned_images = utils.pre_process_images(non_aligned_images, 1.0)
-    disp(tesseract_hebrew_utils.embed_images_in_square(non_aligned_images, 5), 'Non aligned images')
+    if non_aligned_images:
+        non_aligned_images = utils.pre_process_images(non_aligned_images, 1.0)
+        disp(tesseract_hebrew_utils.embed_images_in_square(non_aligned_images, 5), 'Non aligned images')
     # print(distance_matrix)
     # print(distance_matrix.shape)
 

@@ -280,18 +280,19 @@ Resolved since the original review:
 - The optional OpenCV text-label path now uses `cv2.FONT_HERSHEY_PLAIN`.
 - ECC now accepts an OpenCV motion-model constant, with homography preserved
         as the default and regression coverage for Euclidean, affine, and homography modes.
+- The clustering driver now handles empty input, no surviving clusters, and
+        results containing only singleton clusters.
 
 Remaining defects and risks:
 
 1. Distance-cache references are not fully updated after clusters merge.
 2. ECC failures are converted to `0.0`, which hides the reason for failure.
 3. Homography remains the default ECC mode and may be unnecessarily flexible for small glyph images; Euclidean and affine modes are now available for comparison.
-4. The clustering driver assumes a non-empty result and at least one multi-image cluster.
-5. `test_align.py` references an averaging function from the wrong module.
-6. The image hash does not include shape, dtype, source frame, or character identity.
-7. There are no automated tests for coordinate conversion, database relationships, ECC failure behavior, cluster invariants, or average-glyph quality.
-8. Notebook outputs and cached matrices lack dataset and preprocessing provenance.
-9. Dependency configuration is split between `Pipfile`, `pyproject.toml`, and `uv.lock`.
+4. `test_align.py` references an averaging function from the wrong module.
+5. The image hash does not include shape, dtype, source frame, or character identity.
+6. There are no automated tests for coordinate conversion, database relationships, ECC failure behavior, cluster invariants, or average-glyph quality.
+7. Notebook outputs and cached matrices lack dataset and preprocessing provenance.
+8. Dependency configuration is split between `Pipfile`, `pyproject.toml`, and `uv.lock`.
 
 ### Why homography may be too flexible
 
@@ -321,6 +322,7 @@ merge accuracy, stroke distortion, warp size, and cluster purity.
 - Completed: fix the cluster averaging typo.
 - Completed: qualify the OpenCV font constant.
 - Completed: expose the ECC motion model through OpenCV constants.
+- Completed: handle empty and singleton-only clustering results.
 - Add logging and meaningful error reporting.
 - Replace hardcoded letters and database names with validated command-line arguments.
 - Clarify or remove deprecated paths.
