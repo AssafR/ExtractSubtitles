@@ -252,7 +252,7 @@ It is still not integrated into `ClusterManager`, has no clear executable entry 
 - `find_best_average_image()`
 - `calc_average_similar_base()`
 - `warp_image_1()`
-- `warp_image_2()`, which is effectively a stub
+- `warp_image_2()`, which is effectively a stub right now
 
 These represent earlier OCR, matching, or averaging approaches that were superseded by the current ingestion and `ClusterManager` paths.
 
