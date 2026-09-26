@@ -121,7 +121,23 @@ The declared schema is in `resources/letters.sql`.
 
 Stores the detected character, serialized NumPy image, MD5 hash, and an optional `decoding_fk`.
 
-`insert_image()` deduplicates globally by the MD5 hash of raw pixel bytes. Shape, dtype, source frame, and character identity are not included in the hash.
+`insert_image()` deduplicates globally by the MD5 hash of raw pixel bytes. The
+omission of shape and dtype is a low-probability risk under the current
+OpenCV `uint8` pipeline: two different image geometries would need to contain
+the exact same byte sequence. Source-frame omission is probably intentional,
+because source occurrences are recorded separately through `subs_decoded`
+and `subs_files`.
+
+The main risk is the character name. Two images may look the same, but OCR
+may read them as different characters. The second insert can reuse the first
+`images` row because the character is not part of the uniqueness rule. The
+second OCR result could then get the wrong character name.
+
+Similar images can be grouped, but the original OCR records should not be
+deleted. Each record should keep its character, source file, position, and
+original image. Similar images can point to a shared visual group or example
+image. A similarity value should find possible matches, and the images should
+be checked before they are put in the same group.
 
 ### `subs_files`
 
@@ -289,10 +305,9 @@ Remaining defects and risks:
 1. Distance-cache references are not fully updated after clusters merge.
 2. ECC failures are converted to `0.0`, which hides the reason for failure.
 3. Homography remains the default ECC mode and may be unnecessarily flexible for small glyph images; Euclidean and affine modes are now available for comparison.
-4. The image hash does not include shape, dtype, source frame, or character identity.
+4. Image deduplication has no explicit visual-group model. Shape and dtype omission are low-priority risks under the current `uint8` pipeline, but character identity is not part of the uniqueness rule and perceptual grouping could overwrite OCR meaning if implemented through `INSERT OR IGNORE`.
 5. There are no automated tests for coordinate conversion, database relationships, ECC failure behavior, cluster invariants, or average-glyph quality.
 6. Notebook outputs and cached matrices lack dataset and preprocessing provenance.
-7. Dependency configuration is split between `Pipfile`, `pyproject.toml`, and `uv.lock`.
 
 ### Why homography may be too flexible
 
@@ -327,10 +342,11 @@ merge accuracy, stroke distortion, warp size, and cluster purity.
 - Add logging and meaningful error reporting.
 - Replace hardcoded letters and database names with validated command-line arguments.
 - Clarify or remove deprecated paths.
+- Document and test the image-deduplication policy: preserve OCR occurrences and use separate visual groups for perceptual similarity.
 
 ### Partially addressed
 
-Dependencies are declared in `pyproject.toml`, but `Pipfile` is empty and environment metadata is inconsistent. Some configuration values are centralized in `utils.py`, but other thresholds and behavior remain distributed through the code. Some classes have docstrings, but the clustering and registration contracts are incomplete.
+Some configuration values are centralized in `utils.py`, but other thresholds and behavior remain distributed through the code. Some classes have docstrings, but the clustering and registration contracts are incomplete.
 
 ### Future enhancements
 
