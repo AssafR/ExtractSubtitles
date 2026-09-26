@@ -10,7 +10,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT / "src"))
 
 import merge_letters
+import test_align
 from tesseract_hebrew_utils import embed_images_in_square
+from alignment import find_best_average_image_improved
 from utils import ImageCluster, create_combined_image_for_clusters, transform_ecc
 
 
@@ -114,3 +116,7 @@ def test_display_letter_results_handles_singleton_cluster(monkeypatch):
     assert len(transform_calls) == 1
     assert transform_calls[0][0] is image
     assert transform_calls[0][1] is image
+
+
+def test_test_align_uses_the_alignment_average_function():
+    assert test_align.find_best_average_image_improved is find_best_average_image_improved

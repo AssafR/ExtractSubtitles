@@ -2,6 +2,7 @@ import tesseract_hebrew_utils
 import tesseract_sql
 import cv2
 
+from alignment import find_best_average_image_improved
 import utils
 from paths import CANONICAL_DATABASE_PATH
 
@@ -38,7 +39,7 @@ def main():
 
     # disp(all_images)
 
-    tesseract_hebrew_utils.find_best_average_image_improved(images_enlarged)
+    find_best_average_image_improved(images_enlarged)
     best_avg = tesseract_hebrew_utils.find_best_average_image(images_enlarged)
 
     # warped = warp_image_1(img1, img2)

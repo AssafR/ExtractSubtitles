@@ -282,17 +282,17 @@ Resolved since the original review:
         as the default and regression coverage for Euclidean, affine, and homography modes.
 - The clustering driver now handles empty input, no surviving clusters, and
         results containing only singleton clusters.
+- `test_align.py` now imports `find_best_average_image_improved` from `alignment.py`, where it is defined.
 
 Remaining defects and risks:
 
 1. Distance-cache references are not fully updated after clusters merge.
 2. ECC failures are converted to `0.0`, which hides the reason for failure.
 3. Homography remains the default ECC mode and may be unnecessarily flexible for small glyph images; Euclidean and affine modes are now available for comparison.
-4. `test_align.py` references an averaging function from the wrong module.
-5. The image hash does not include shape, dtype, source frame, or character identity.
-6. There are no automated tests for coordinate conversion, database relationships, ECC failure behavior, cluster invariants, or average-glyph quality.
-7. Notebook outputs and cached matrices lack dataset and preprocessing provenance.
-8. Dependency configuration is split between `Pipfile`, `pyproject.toml`, and `uv.lock`.
+4. The image hash does not include shape, dtype, source frame, or character identity.
+5. There are no automated tests for coordinate conversion, database relationships, ECC failure behavior, cluster invariants, or average-glyph quality.
+6. Notebook outputs and cached matrices lack dataset and preprocessing provenance.
+7. Dependency configuration is split between `Pipfile`, `pyproject.toml`, and `uv.lock`.
 
 ### Why homography may be too flexible
 
@@ -323,6 +323,7 @@ merge accuracy, stroke distortion, warp size, and cluster purity.
 - Completed: qualify the OpenCV font constant.
 - Completed: expose the ECC motion model through OpenCV constants.
 - Completed: handle empty and singleton-only clustering results.
+- Completed: correct the `test_align.py` averaging-function import.
 - Add logging and meaningful error reporting.
 - Replace hardcoded letters and database names with validated command-line arguments.
 - Clarify or remove deprecated paths.
